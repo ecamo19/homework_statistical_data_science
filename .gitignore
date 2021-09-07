@@ -1,4 +1,8 @@
 # Ignore the build directory
 Rmarkdowns/
 
+# Ignore jupyter checkpoints 
+*_checkpoints
 
+# Ignore images
+*.png
