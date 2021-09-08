@@ -1,8 +1,12 @@
 # Ignore the build directory
-Rmarkdowns/
+course_rmarkdowns/
 
 # Ignore jupyter checkpoints 
 *_checkpoints
 
 # Ignore images
 #*.png
+
+# Ignore .Rproj
+.Rproj
+.Rproj.user
