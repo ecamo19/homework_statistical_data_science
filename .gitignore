@@ -1,5 +1,5 @@
 # Ignore the build directory
-course_rmarkdowns/
+notebooks/
 
 # Ignore jupyter checkpoints 
 *_checkpoints
