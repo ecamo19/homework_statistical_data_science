@@ -1,5 +1,5 @@
 # Ignore the build directory
-#notebooks/
+notebooks_Rmd/
 
 # Ignore jupyter checkpoints 
 *_checkpoints
