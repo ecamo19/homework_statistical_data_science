@@ -4,8 +4,8 @@
 # Homework for Statistical Data Science Course
 Project description:
 
-THis repo contains all the homework done for the course 
+This repo contains all the homework done for the course 
 
 
-## Directory structure
+
 
