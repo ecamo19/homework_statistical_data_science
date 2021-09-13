@@ -4,7 +4,16 @@
 channels:
   - conda-forge
 dependencies:
-  - r-base=4.0
+  - r-base = 4.0
   - r-tidyverse
   - r-palmerpenguins
+  - r-sf
+  - r-mapview
+  - r-gghighlight
+  - r-lubridate
+  - r-janitor
+  - r-usmap
+  - r-viridis
+  - r-paletteer
+  - r-cowplot
   
