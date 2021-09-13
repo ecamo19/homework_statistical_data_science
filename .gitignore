@@ -8,5 +8,5 @@ notebooks_Rmd/
 #*.png
 
 # Ignore .Rproj
-.Rproj
-.Rproj.user
+*.Rproj
+*.Rproj.user
