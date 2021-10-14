@@ -1,0 +1,153 @@
+---
+title: 'STAT 534 Statistical Data Science I: Exam I (Take-Home Portion)'
+author: "Erick Calderon-Morales"
+date: "Fall 2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE ,comment = "", fig.align = 'center',
+					  fig.width = 7, fig.height = 5, warning = FALSE)
+```
+
+__Due Date:__ October 17 (Sunday)
+
+__Instructions:__ There are 50 points plus 10 extra credits on this portion of the exam. You may use any reference material for your exam. However, you are not to discuss any questions about the exam with anyone other than yourself. Please contact me with any questions and I will respond as soon as possible within the same day. Be sure to write/type your answers in complete sentences and show your work. Any items including R output not commented on will receive no credit. Attach your R code as an appendix or as a separate file. (If you use R markdown, you may keep the code
+inserted inline.)
+
+
+```{r message=FALSE, warning=FALSE}
+# Packages
+library(tidyverse)
+library(janitor)
+# Best subset selection 
+library(leaps)
+# For tidy function
+library(broom)
+# For mse plot
+library(ggvis)
+```
+
+__1. (20+10 pts) In this problem, we will generate simulated data, and will then apply best subset selection to this data using the validation method. The goal is to explore that as model size increases, the training error will necessarily decrease, but the testing error may not.__
+
+_(a) (5 pts) Generate a data set with p = 20 predictors and n = 1000 observations according to the model:_
+
+$$Y = \beta_0\ +\ \beta_1X_1\ ...\ +\ \beta_pX_p\ +\ \epsilon $$
+
+where $X_j \sim N(0,1)$  and $\epsilon\ \sim N (0, 1)$ independently. Randomly select your $\beta$ values but let some elements to be exactly zero. Then split your data set into a training set containing 100 observations and a testing set containing 900 observations.
+
+```{r}
+set.seed(123)
+
+# Generate e values with mean 0 and sd 1
+epsilon <- rnorm(1000, mean = 0, sd = 0)
+
+# Generate x values with mean 0 and sd 1
+n = 1000
+variables = 20
+
+# Create empty data frame
+empty_data_set <- data.frame(matrix(numeric(variables * n), 
+                                    ncol = variables,
+                                    nrow = n))
+
+for (each_variable in seq(along = 1:variables)){
+    
+     # Get random data and append to data frame   
+     empty_data_set[,each_variable] <- rnorm(1000, mean = 0, sd = 1)
+}
+
+# Clean data set
+x_variables <- 
+    empty_data_set %>% 
+    clean_names()
+```
+
+
+
+```{r}
+set.seed(123)
+
+# Generate Y using my betas and simulated data
+y <- x_variables$x1       + 9*(x_variables$x2)   + 7*(x_variables$x3)   + 
+     65*(x_variables$x4)  + 0*(x_variables$x5)   + 5*(x_variables$x6)   + 
+     75*(x_variables$x7)  + 76*(x_variables$x8)  + 34*(x_variables$x9)  + 
+     12*(x_variables$x10) + 34*(x_variables$x11) + 45*(x_variables$x12) + 
+     82*(x_variables$x13) + 23*(x_variables$x14) + 0*(x_variables$x15)  + 
+     90*(x_variables$x16) + 0*(x_variables$x17)  + 1*(x_variables$x18)  + 
+     19*(x_variables$x19) + 20*(x_variables$x19) + epsilon
+```
+
+```{r}
+# Join data
+data_set <- cbind(y,x_variables)
+```
+
+
+```{r}
+# slip data into train and test
+# Get index
+train_index <- sample(1:n,900)
+
+# Test set
+data_set_train <- data_set[train_index,]
+nrow(data_set_train)
+
+# Train set
+data_set_test <-  data_set[-train_index,]
+nrow(data_set_test)
+```
+```{r}
+model_matrix_train <- model.matrix(y ~ ., data = data_set_train)
+model_matrix_test  <- model.matrix(y ~ ., data = data_set_test)
+```
+
+_(b) (3 pts) Perform best subset selection on the training set, and plot the training set MSE associated with the best model of each size. (Hint: regsubsets() returns error (or residual) sum of squares (rss) for each model and MSE = RSS/n.)_
+
+```{r}
+# Model on train data
+best_subset_sel <- regsubsets(y ~., nvmax = 20, data = data_set_train)
+best_subset_sel_summary <- summary(best_subset_sel)
+coef(best_subset_sel, id = 11)
+colnames(best_subset_sel_summary$which)[[2]]
+```
+
+
+```{r}
+# Get rss and change the colname
+models_rss <- as.data.frame(best_subset_sel_summary$rss)
+colnames(models_rss) <- "rss"
+
+# Calculate MSE
+mse <- models_rss$rss/nrow(data_set_train)
+
+# Join data
+models_errors <- cbind(models_rss,mse)
+```
+
+```{r}
+ggplot(data = models_errors , aes(x = c(1:20), y = mse, color = mse )) +
+    geom_point() +
+    ylab("Mean squared error") + xlab("Number of variables") +
+    theme_bw()
+```
+
+_(c) (6 pts) Plot the testing set MSE associated with the best model of each size. For which model size does the testing set MSE take on its minimum value? (Hint: For each model, obtain the predicted values for the testing set and then compute associated MSE.)_
+
+
+```{r}
+val_errors <- rep (NA , 20)
+
+for ( i in 1:20) {
+    coefi <- coef(best_subset_sel, id = i)
+    
+    pred <- model_matrix_test[,names(coefi)] %*% coefi
+    
+    val_errors[i] <- mean((data_set_test$y - pred)^2)
+}
+```
+
+#f ejercicio
+https://www.kaggle.com/lmorgan95/islr-linear-model-selection-ch-6-solutions/script
