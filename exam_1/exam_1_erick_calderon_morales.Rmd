@@ -30,6 +30,7 @@ library(broom)
 library(ggvis)
 ```
 
+# Exercise 1
 __1. (20+10 pts) In this problem, we will generate simulated data, and will then apply best subset selection to this data using the validation method. The goal is to explore that as model size increases, the training error will necessarily decrease, but the testing error may not.__
 
 _(a) (5 pts) Generate a data set with p = 20 predictors and n = 1000 observations according to the model:_
@@ -42,16 +43,16 @@ where $X_j \sim N(0,1)$  and $\epsilon\ \sim N (0, 1)$ independently. Randomly s
 set.seed(123)
 
 # Generate e values with mean 0 and sd 1
-epsilon <- rnorm(1000, mean = 0, sd = 0)
+epsilon <- rnorm(1000, mean = 0, sd = 1)
 
 # Generate x values with mean 0 and sd 1
 n = 1000
 variables = 20
 
 # Create empty data frame
-empty_data_set <- data.frame(matrix(numeric(variables * n), 
+empty_data_set <- matrix(numeric(variables * n), 
                                     ncol = variables,
-                                    nrow = n))
+                                    nrow = n)
 
 for (each_variable in seq(along = 1:variables)){
     
@@ -60,43 +61,45 @@ for (each_variable in seq(along = 1:variables)){
 }
 
 # Clean data set
-x_variables <- 
-    empty_data_set %>% 
-    clean_names()
+x_variables <- empty_data_set
+   
 ```
 
 
-
 ```{r}
-set.seed(123)
+# Select randomly the betas and set some to zero
+random_betas <- rnorm(variables, mean = 5, sd = 10)
+random_betas[5] <- 0
+random_betas[15] <- 0
+random_betas[17] <- 0
+
 
 # Generate Y using my betas and simulated data
-y <- x_variables$x1       + 9*(x_variables$x2)   + 7*(x_variables$x3)   + 
-     65*(x_variables$x4)  + 0*(x_variables$x5)   + 5*(x_variables$x6)   + 
-     75*(x_variables$x7)  + 76*(x_variables$x8)  + 34*(x_variables$x9)  + 
-     12*(x_variables$x10) + 34*(x_variables$x11) + 45*(x_variables$x12) + 
-     82*(x_variables$x13) + 23*(x_variables$x14) + 0*(x_variables$x15)  + 
-     90*(x_variables$x16) + 0*(x_variables$x17)  + 1*(x_variables$x18)  + 
-     19*(x_variables$x19) + 20*(x_variables$x19) + epsilon
+y <-  x_variables %*% random_betas + epsilon
+colnames(y) <- "y"
 ```
 
 ```{r}
-# Join data
-data_set <- cbind(y,x_variables)
+# Join data'
+data_set_full <- 
+  cbind(y,as.data.frame(x_variables)) %>% 
+  clean_names()
+
 ```
 
 
 ```{r}
 # slip data into train and test
+
 # Get index
-train_index <- sample(1:n,900)
+train_index <- sample(1:nrow(data_set_full),900)
 
 # Test set
-data_set_train <- data_set[train_index,]
+data_set_train <- data_set_full[train_index,]
 nrow(data_set_train)
 
 # Train set
-data_set_test <-  data_set[-train_index,]
+data_set_test <-  data_set_full[-train_index,]
 nrow(data_set_test)
 ```
 ```{r}
@@ -109,9 +112,9 @@ _(b) (3 pts) Perform best subset selection on the training set, and plot the tra
 ```{r}
 # Model on train data
 best_subset_sel <- regsubsets(y ~., nvmax = 20, data = data_set_train)
+
 best_subset_sel_summary <- summary(best_subset_sel)
-coef(best_subset_sel, id = 11)
-colnames(best_subset_sel_summary$which)[[2]]
+
 ```
 
 
@@ -121,33 +124,125 @@ models_rss <- as.data.frame(best_subset_sel_summary$rss)
 colnames(models_rss) <- "rss"
 
 # Calculate MSE
-mse <- models_rss$rss/nrow(data_set_train)
+mse_train_set <- models_rss$rss/nrow(data_set_train)
 
 # Join data
-models_errors <- cbind(models_rss,mse)
+models_errors <- cbind(models_rss,mse_train_set)
 ```
 
 ```{r}
-ggplot(data = models_errors , aes(x = c(1:20), y = mse, color = mse )) +
+ggplot(data = models_errors, aes(x = c(1:20), y = mse_train_set, 
+                                 color = mse_train_set))+
     geom_point() +
-    ylab("Mean squared error") + xlab("Number of variables") +
+    ylab("Mean squared error train set") + xlab("Number of variables") +
     theme_bw()
 ```
 
-_(c) (6 pts) Plot the testing set MSE associated with the best model of each size. For which model size does the testing set MSE take on its minimum value? (Hint: For each model, obtain the predicted values for the testing set and then compute associated MSE.)_
-
+_(c) (6pts) Plot the testing set MSE associated with the best model of each size. For which model size does the testing set MSE take on its minimum value? (Hint: For each model, obtain the predicted values for the testing set and then compute associated MSE.)_
 
 ```{r}
-val_errors <- rep (NA , 20)
 
-for ( i in 1:20) {
-    coefi <- coef(best_subset_sel, id = i)
+# Create empty vector
+mse_test_set <- rep (NA , 20)
+
+for (each_model in 1:20) {
+  
+    # Get the coefficients of each model build with the train set
+    coefs <- coef(best_subset_sel, id = each_model)
     
-    pred <- model_matrix_test[,names(coefi)] %*% coefi
+    # get model variables and multiply then for their coef for getting the pred
+    pred <- model_matrix_test[,names(coefs)] %*% coefs
     
-    val_errors[i] <- mean((data_set_test$y - pred)^2)
+    # get mse
+    mse_test_set[each_model]<- mean((data_set_test$y - pred)^2)
 }
+
+# Add vector to a mse errors data frame 
+mse_test_set <- as.data.frame(mse_test_set)
+
+models_errors <- cbind(models_errors,mse_test_set)
+
 ```
 
-#f ejercicio
-https://www.kaggle.com/lmorgan95/islr-linear-model-selection-ch-6-solutions/script
+```{r}
+ggplot(data = models_errors, aes(x = c(1:20), y = mse_test_set, 
+                                color = mse_test_set)) +
+    geom_point() +
+    ylab("Mean squared error test set") + xlab("Number of variables") +
+    theme_bw()
+```
+_(d) (3 pts) What do you observe about the changes in training MSE and testing MSE as model size increases?_
+```{r}
+ggplot(data = models_errors) +
+    geom_point(aes(x = c(1:20), y = mse_train_set, color = "MSE Train")) +
+    geom_point(aes(x = c(1:20), y = mse_test_set, color =  "MSE Test")) +
+    ylab("Mean squared error test set") + xlab("Number of variables") +
+    theme_bw()
+```
+
+_(e) (3 pts) How does the model at which the testing MSE is minimized compare to the true model used to generate the data? (Hint: You want to refit the regression model to the entire data set using the selected predictors.)_
+```{r}
+coef(best_subset_sel, id = 15)
+```
+```{r}
+# Refit the regression model to the entire data using the selected predictors
+
+# Get MSE from original model
+model_true <- lm(y ~ ., data = data_set_full)
+model_true_pred <- predict(model_true)
+(mse_model_true <- mean((y - model_true_pred)^2))
+
+# Get MSE from model chosen
+
+model_selected <- lm(y ~ v1  + v2  + v3  + v4  + v7  + 
+                         v8  + v10 + v11 + v12 + v13 + 
+                         v14 + v16 + v18 + v19 + v20,
+                     data = data_set_full)
+
+model_selected_pred <- predict(model_selected)
+(mse_model_selected <- mean((y - model_selected_pred)^2))
+```
+
+
+
+_(f) (+10 pts) Create a plot displaying $\sqrt{\sum_{j=0}^p(\beta_j - \hat \beta_j^s}^2$ where $\hat \beta_j^s$ is the jth coefficient estimate for the best model of size s using the entire data set. Comment on what you observe.How does this compare to the testing MSEb plot from part (c)?_
+
+```{r}
+coefficients <-
+  # Get the original betas
+  data.frame(parameter = colnames(best_subset_sel_summary$which), 
+                           actual = c(0, random_betas)) %>%
+  
+  # Get estimated betas
+  left_join(data.frame(parameter = names(coef(best_subset_sel, id = 15)), 
+                       estimated = coef(best_subset_sel, id = 15)), 
+            by = "parameter") %>%
+  # Set to 0 the estimated betas that were not estimated
+  mutate(estimated = case_when(is.na(estimated) ~ 0, TRUE ~ estimated))
+
+```
+
+# Exercise 2
+
+
+2. (30 pts) Use the UScrime data set in the MASS library to study the effect of punishment
+regimes on crime rates.
+(a) (5 pts) Explore the variables using appropriate graphics and summary statistics. Com-
+ment on your observations.
+(b) (12 pts) Split the data into 75% training and 25% testing and build the following models
+using the training set:
+•
+•
+•
+•
+multiple linear regression
+ridge regression
+lasso regression
+principal components regression (justify how many principal components should be
+used)
+• partial least squares (justify how many directions should be used)
+(c) (5 pts) Compare the effectiveness of each model on training vs. testing data.
+(d) (8 pts) Select the best two models from above. Interpret and compare their respective
+final fitted models.
+
+
