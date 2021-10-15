@@ -9,7 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE ,comment = "", fig.align = 'center',
-					  fig.width = 7, fig.height = 5, warning = FALSE)
+					  fig.width = 12, fig.height = 6, warning = FALSE)
 ```
 
 __Due Date:__ October 17 (Sunday)
@@ -21,6 +21,7 @@ inserted inline.)
 ```{r message=FALSE, warning=FALSE}
 # Packages
 library(tidyverse)
+# For cleaning names
 library(janitor)
 # Best subset selection 
 library(leaps)
@@ -28,6 +29,16 @@ library(leaps)
 library(broom)
 # For mse plot
 library(ggvis)
+# For UScrimes dataset
+library(MASS)
+# For correlations 
+library(GGally)
+# For joining plots
+library(cowplot)
+# For lasso and ridge regressions
+library(glmnet)
+# For pls and pcr regressions
+library(pls)
 ```
 
 # Exercise 1
@@ -69,6 +80,8 @@ x_variables <- empty_data_set
 ```{r}
 # Select randomly the betas and set some to zero
 random_betas <- rnorm(variables, mean = 5, sd = 10)
+
+# Set some to Zero
 random_betas[5] <- 0
 random_betas[15] <- 0
 random_betas[17] <- 0
@@ -111,10 +124,13 @@ _(b) (3 pts) Perform best subset selection on the training set, and plot the tra
 
 ```{r}
 # Model on train data
-best_subset_sel <- regsubsets(y ~., nvmax = 20, data = data_set_train)
+best_subset_sel <- regsubsets(y ~.,
+                              nvmax = 20,
+                              method="exhaustive", 
+                              nbest=1,
+                              data = data_set_train)
 
 best_subset_sel_summary <- summary(best_subset_sel)
-
 ```
 
 
@@ -141,7 +157,6 @@ ggplot(data = models_errors, aes(x = c(1:20), y = mse_train_set,
 _(c) (6pts) Plot the testing set MSE associated with the best model of each size. For which model size does the testing set MSE take on its minimum value? (Hint: For each model, obtain the predicted values for the testing set and then compute associated MSE.)_
 
 ```{r}
-
 # Create empty vector
 mse_test_set <- rep (NA , 20)
 
@@ -179,10 +194,23 @@ ggplot(data = models_errors) +
     ylab("Mean squared error test set") + xlab("Number of variables") +
     theme_bw()
 ```
+```{r}
+plot(best_subset_sel_summary$cp ,xlab =" Number of Variables ", ylab =" Cp",type="l")
+which.min(best_subset_sel_summary$cp)
+points(17,best_subset_sel_summary$cp[17], col ="red", cex =2, pch =20)
+
+
+plot(best_subset_sel_summary$bic,xlab =" Number of Variables ", ylab =" BIC ",type="l") 
+points (which.min(best_subset_sel_summary$bic),
+        best_subset_sel_summary$bic[which.min(best_subset_sel_summary$bic)], 
+        col ="red",cex =2, pch =20)
+```
+
+
 
 _(e) (3 pts) How does the model at which the testing MSE is minimized compare to the true model used to generate the data? (Hint: You want to refit the regression model to the entire data set using the selected predictors.)_
 ```{r}
-coef(best_subset_sel, id = 15)
+coef(best_subset_sel, id = 17)
 ```
 ```{r}
 # Refit the regression model to the entire data using the selected predictors
@@ -194,16 +222,14 @@ model_true_pred <- predict(model_true)
 
 # Get MSE from model chosen
 
-model_selected <- lm(y ~ v1  + v2  + v3  + v4  + v7  + 
-                         v8  + v10 + v11 + v12 + v13 + 
+model_selected <- lm(y ~ v1  + v2  + v3  + v4  + v6  + v7  + 
+                         v8  + v9  + v10 + v11 + v12 + v13 + 
                          v14 + v16 + v18 + v19 + v20,
                      data = data_set_full)
 
 model_selected_pred <- predict(model_selected)
 (mse_model_selected <- mean((y - model_selected_pred)^2))
 ```
-
-
 
 _(f) (+10 pts) Create a plot displaying $\sqrt{\sum_{j=0}^p(\beta_j - \hat \beta_j^s}^2$ where $\hat \beta_j^s$ is the jth coefficient estimate for the best model of size s using the entire data set. Comment on what you observe.How does this compare to the testing MSEb plot from part (c)?_
 
@@ -214,8 +240,8 @@ coefficients <-
                            actual = c(0, random_betas)) %>%
   
   # Get estimated betas
-  left_join(data.frame(parameter = names(coef(best_subset_sel, id = 15)), 
-                       estimated = coef(best_subset_sel, id = 15)), 
+  left_join(data.frame(parameter = names(coef(best_subset_sel, id = 17)), 
+                       estimated = coef(best_subset_sel, id = 17)), 
             by = "parameter") %>%
   # Set to 0 the estimated betas that were not estimated
   mutate(estimated = case_when(is.na(estimated) ~ 0, TRUE ~ estimated))
@@ -224,25 +250,116 @@ coefficients <-
 
 # Exercise 2
 
+__2. (30 pts) Use the UScrime data set in the MASS library to study the effect of punishment regimes on crime rates.__
 
-2. (30 pts) Use the UScrime data set in the MASS library to study the effect of punishment
-regimes on crime rates.
-(a) (5 pts) Explore the variables using appropriate graphics and summary statistics. Com-
-ment on your observations.
-(b) (12 pts) Split the data into 75% training and 25% testing and build the following models
-using the training set:
-•
-•
-•
-•
-multiple linear regression
-ridge regression
-lasso regression
-principal components regression (justify how many principal components should be
-used)
-• partial least squares (justify how many directions should be used)
-(c) (5 pts) Compare the effectiveness of each model on training vs. testing data.
-(d) (8 pts) Select the best two models from above. Interpret and compare their respective
-final fitted models.
+```{r}
+set.seed(123)
+# Load data
+data("UScrime")
+uscrime <- 
+  UScrime %>% 
+    clean_names()
+
+summary(uscrime) 
+```
+
+_(a) (5 pts) Explore the variables using appropriate graphics and summary statistics. Comment on your observations._
+
+```{r}
+# Nice visualization of correlations
+correlations <- 
+  uscrime %>%
+    ggcorr(geom = "blank", label = TRUE, hjust = 0.75) +
+    geom_point(size = 10, aes(color = coefficient > 0, 
+                              alpha = abs(coefficient) > 0.5)) +
+    scale_alpha_manual(values = c("TRUE" = 0.25, "FALSE" = 0)) +
+    guides(color = FALSE, alpha = FALSE)
+```
+
+```{r}
+y_density <- ggplot(uscrime, aes(x = y)) + geom_density()
+```
+
+```{r}
+cowplot::plot_grid(y_density,correlations)
+```
+From the plot above I observed high correlation between variables. Especially the percentage of males aged 14–24 (m), the indicator variable for a Southern state (so), gross domestic product per capita (gdp) and income inequality (ineq) are highly correlated with other variables.
+
+From the variables above its worth to mention that the percentage of males aged 14–24 (m) is positively correlated with the variables Southern States (so),number of non-whites per 1000 people (nw) and income inequality. While is negatively correlated with the variables mean years of schooling (Ed), police expenditure in 1960 (Po1) police expenditure in 1959 (Po2) and gdp. While the variable income inequality is negatively correlated with gdp, Po1, Po2 and ed and positively correlated with nw, so and m.
+
+
+```{r}
+uscrime <- 
+  uscrime %>% 
+    mutate(so = factor(so),
+           log_y = log(y)) %>% 
+    dplyr::select(-y)
+```
+ 
+
+_(b) (12 pts) Split the data into 75% training and 25% testing and build the following models using the training set:_
+
+
+```{r}
+# slip data into train and test
+
+# Get index
+train_index <- sample(1:nrow(uscrime),(nrow(uscrime)*75)/100)
+
+# Train set
+uscrime_train <- uscrime[train_index,]
+(nrow(uscrime_train)*100)/nrow(uscrime)
+
+# This is done for fittin ridge and lasso
+x_vars_train <- model.matrix(log_y ~., data = uscrime_train)[,-1]
+y_var_train <- uscrime_train$log_y 
+
+# Test set
+uscrime_test <-  uscrime[-train_index,]
+(nrow(uscrime_test)*100)/nrow(uscrime)
+
+# This is done for fittin ridge and lasso
+x_vars_test <- model.matrix(log_y ~., data = uscrime_test)[,-1]
+y_var_test <- uscrime_test$log_y 
+
+```
+
+
++ Multiple linear regression
+```{r}
+mult_reg_train <- regsubsets(log_y ~., nvmax = 16, 
+                             nbest = 1,
+                             method="exhaustive", 
+                             data = uscrime_train)
+```
+
+
++ Ridge regression
+```{r}
+ridge_uscrimes_train <- cv.glmnet(x_vars_train, y_var_train, alpha = 0)
+```
+
++ Lasso regression
+```{r}
+lasso_uscrimes_train <- cv.glmnet(x_vars_train, y_var_train, alpha = 1)
+```
+
++ Principal components regression (justify how many principal components should be used)
+```{r}
+pcr_uscrimes_train <- pcr(log_y ~ ., data = uscrime_train, 
+                          scale = TRUE , 
+                          validation = "CV")
+```
+
++ Partial least squares (justify how many directions should be used)
+```{r}
+pls_uscrimes_train <- plsr(log_y ~ ., data = uscrime_train, 
+                          scale = TRUE , 
+                          validation = "CV")
+```
+
+_(c) (5 pts) Compare the effectiveness of each model on training vs. testing data._
+
+_(d) (8 pts) Select the best two models from above. Interpret and compare their respective final fitted models._
 
 
