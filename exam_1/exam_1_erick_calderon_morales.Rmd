@@ -39,6 +39,8 @@ library(cowplot)
 library(glmnet)
 # For pls and pcr regressions
 library(pls)
+# For tables
+library(gt)
 ```
 
 # Exercise 1
@@ -82,7 +84,7 @@ x_variables <- empty_data_set
 random_betas <- rnorm(variables, mean = 5, sd = 10)
 
 # Set some to Zero
-random_betas[5] <- 0
+random_betas[5]  <- 0
 random_betas[15] <- 0
 random_betas[17] <- 0
 
@@ -195,15 +197,9 @@ ggplot(data = models_errors) +
     theme_bw()
 ```
 ```{r}
-plot(best_subset_sel_summary$cp ,xlab =" Number of Variables ", ylab =" Cp",type="l")
-which.min(best_subset_sel_summary$cp)
-points(17,best_subset_sel_summary$cp[17], col ="red", cex =2, pch =20)
 
-
-plot(best_subset_sel_summary$bic,xlab =" Number of Variables ", ylab =" BIC ",type="l") 
-points (which.min(best_subset_sel_summary$bic),
-        best_subset_sel_summary$bic[which.min(best_subset_sel_summary$bic)], 
-        col ="red",cex =2, pch =20)
+plot(best_subset_sel_summary$cp ,xlab =" Number of Variables ", ylab =" Cp",type="p")
+plot(best_subset_sel_summary$bic,xlab =" Number of Variables ", ylab =" BIC ",type="p")
 ```
 
 
@@ -233,6 +229,7 @@ model_selected_pred <- predict(model_selected)
 
 _(f) (+10 pts) Create a plot displaying $\sqrt{\sum_{j=0}^p(\beta_j - \hat \beta_j^s}^2$ where $\hat \beta_j^s$ is the jth coefficient estimate for the best model of size s using the entire data set. Comment on what you observe.How does this compare to the testing MSEb plot from part (c)?_
 
+https://www.kaggle.com/mahmoud86/tutorial-subset-selection-methods
 ```{r}
 coefficients <-
   # Get the original betas
@@ -254,8 +251,10 @@ __2. (30 pts) Use the UScrime data set in the MASS library to study the effect o
 
 ```{r}
 set.seed(123)
+
 # Load data
 data("UScrime")
+
 uscrime <- 
   UScrime %>% 
     clean_names()
@@ -292,6 +291,7 @@ From the variables above its worth to mention that the percentage of males aged 
 uscrime <- 
   uscrime %>% 
     mutate(so = factor(so),
+           # log transform y variable
            log_y = log(y)) %>% 
     dplyr::select(-y)
 ```
@@ -317,10 +317,11 @@ y_var_train <- uscrime_train$log_y
 # Test set
 uscrime_test <-  uscrime[-train_index,]
 (nrow(uscrime_test)*100)/nrow(uscrime)
-
-# This is done for fittin ridge and lasso
-x_vars_test <- model.matrix(log_y ~., data = uscrime_test)[,-1]
 y_var_test <- uscrime_test$log_y 
+
+
+# This is done for fitting ridge and lasso
+x_vars_test <- model.matrix(log_y ~., data = uscrime_test)[,-1]
 
 ```
 
@@ -331,7 +332,25 @@ mult_reg_train <- regsubsets(log_y ~., nvmax = 16,
                              nbest = 1,
                              method="exhaustive", 
                              data = uscrime_train)
+
+mult_reg_train_summary <- summary(mult_reg_train)
 ```
+
+```{r}
+# Select best multiple regression model
+plot(mult_reg_train_summary$cp , xlab =" Number of Variables ", ylab =" Cp",type="p")
+plot(mult_reg_train_summary$bic, xlab =" Number of Variables ", ylab =" BIC ",type="p")
+```
+```{r}
+coef(mult_reg_train, id = 6)
+```
+
+```{r}
+# Refit the model
+best_mult_reg_train <- lm(log_y ~ m + so + ed + po1 + ineq + time,  
+                          data = uscrime_train)
+```
+
 
 
 + Ridge regression
@@ -339,9 +358,18 @@ mult_reg_train <- regsubsets(log_y ~., nvmax = 16,
 ridge_uscrimes_train <- cv.glmnet(x_vars_train, y_var_train, alpha = 0)
 ```
 
+```{r}
+plot(ridge_uscrimes_train)
+```
+
+
 + Lasso regression
 ```{r}
 lasso_uscrimes_train <- cv.glmnet(x_vars_train, y_var_train, alpha = 1)
+```
+
+```{r}
+plot(lasso_uscrimes_train)
 ```
 
 + Principal components regression (justify how many principal components should be used)
@@ -351,6 +379,13 @@ pcr_uscrimes_train <- pcr(log_y ~ ., data = uscrime_train,
                           validation = "CV")
 ```
 
+
+```{r}
+validationplot(pcr_uscrimes_train, val.type = "MSEP", type = "p")
+```
+I choose to use 5 components for the principal component regression since the value of MSEP start to stabilize after 5 components 
+
+
 + Partial least squares (justify how many directions should be used)
 ```{r}
 pls_uscrimes_train <- plsr(log_y ~ ., data = uscrime_train, 
@@ -358,8 +393,121 @@ pls_uscrimes_train <- plsr(log_y ~ ., data = uscrime_train,
                           validation = "CV")
 ```
 
+```{r}
+validationplot(pls_uscrimes_train, val.type = "MSEP", type = "p")
+```
+I choose to use 3 components for the partial least squared regression since it has the lowest MSEP value.
+
+
 _(c) (5 pts) Compare the effectiveness of each model on training vs. testing data._
+
+ 
++ Multiple linear regression MSE
+```{r}
+# Training error
+mult_mse_train <- summary(best_mult_reg_train)$sigma^2
+
+# Testing error
+mult_pred <- predict(best_mult_reg_train, newx = uscrime_test)
+
+mult_mse_test <- mean((mult_pred - y_var_test)^2)
+```
+
++ Ridge regression MSE
+```{r}
+# MSE train
+ridge_pred_train <- predict(ridge_uscrimes_train, 
+                            s = ridge_uscrimes_train$lambda.1se,
+                            newx = x_vars_train)
+
+# Training error
+ridge_mse_train <- mean((ridge_pred_train - y_var_train)^2) 
+
+# MSE test
+ridge_pred_test <- predict(ridge_uscrimes_train, 
+                            s = ridge_uscrimes_train$lambda.1se,
+                            newx = x_vars_test)
+# Test error
+ridge_mse_test <- mean((ridge_pred_test - y_var_test)^2) 
+```
+
++ Lasso regression MSE
+```{r}
+
+# MSE train
+lasso_pred_train <- predict(lasso_uscrimes_train, 
+                            s = lasso_uscrimes_train$lambda.1se,
+                            newx = x_vars_train)
+
+# Training error
+lasso_mse_train <- mean((lasso_pred_train - y_var_train)^2) 
+
+# MSE test
+lasso_pred_test <- predict(lasso_uscrimes_train, 
+                            s = lasso_uscrimes_train$lambda.1se,
+                            newx = x_vars_test)
+# Test error
+lasso_mse_test <- mean((lasso_pred_test - y_var_test)^2) 
+```
+
++ PCR MSE
+```{r}
+# Train error
+pcr_pred_train <- predict(pcr_uscrimes_train, data = uscrime_train, ncomp = 5)
+pcr_mse_train <- mean((pcr_pred_train - y_var_train)^2)
+
+# Test error
+pcr_pred_test <- predict(pcr_uscrimes_train, uscrime_test, ncomp = 5)
+pcr_mse_test <- mean((pcr_pred_test - y_var_test)^2)
+```
+
++ PLSR MSE
+```{r}
+# Train error
+pls_pred_train <- predict(pls_uscrimes_train, data = uscrime_train, ncomp = 3)
+pls_mse_train <- mean((pls_pred_train - y_var_train)^2)
+
+# Test error
+pls_pred_test <- predict(pls_uscrimes_train, uscrime_test, ncomp = 3)
+pls_mse_test <- mean((pls_pred_test - y_var_test)^2)
+```
+
+
+
+_Table 1: Models MSE_
+```{r}
+tribble(
+~model, ~mse_train, ~mse_test,~difference,
+"MLR",   mult_mse_train,  mult_mse_test,  abs(mult_mse_test  - mult_mse_train),
+"RIDGE", ridge_mse_train, ridge_mse_test, abs(ridge_mse_test - ridge_mse_train),
+"LASSO", lasso_mse_train, lasso_mse_test, abs(lasso_mse_test - lasso_mse_train),
+"PCR",   pcr_mse_train,   pcr_mse_test,   abs(pcr_mse_test   - pcr_mse_train),
+"PLS",   pls_mse_train,   pls_mse_test,   abs(pls_mse_test   - pls_mse_train)
+) %>% gt()
+```
+
+Based on which model has the lowest mse test value and the lowest difference between mse test and mse train I decided to choose the Ridge model and the Principal component regression model with 5 components.  
 
 _(d) (8 pts) Select the best two models from above. Interpret and compare their respective final fitted models._
 
++ Refit Ridge model to the entire data set
+```{r}
+x_variables_uscrime <- model.matrix(log_y ~., data = uscrime)[,-1]
+y_variable_uscrime <- uscrime$log_y
+
+ridge_uscrimes <- cv.glmnet(x_variables_uscrime, y_variable_uscrime, 
+                                  alpha = 0)
+
+coef(ridge_uscrimes)
+```
+
++ Refit PCR model to the entire data set
+```{r}
+pcr_uscrimes <- pcr(log_y ~ ., ncomp = 5,
+                          scale = TRUE ,
+                          data = uscrime, 
+                          validation = "CV")
+summary(pcr_uscrimes)
+pcr_uscrimes[["coefficients"]][,,1]
+```
 
