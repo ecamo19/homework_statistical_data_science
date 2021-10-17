@@ -127,10 +127,10 @@ _(b) (3 pts) Perform best subset selection on the training set, and plot the tra
 ```{r}
 # Model on train data
 best_subset_sel <- regsubsets(y ~.,
-                              nvmax = 20,
-                              method="exhaustive", 
-                              nbest=1,
-                              data = data_set_train)
+                              nvmax  = 20,
+                              method = "exhaustive", 
+                              nbest  = 1,
+                              data   = data_set_train)
 
 best_subset_sel_summary <- summary(best_subset_sel)
 ```
@@ -211,39 +211,65 @@ coef(best_subset_sel, id = 17)
 ```{r}
 # Refit the regression model to the entire data using the selected predictors
 
-# Get MSE from original model
+# True model
 model_true <- lm(y ~ ., data = data_set_full)
+
+# Get MSE from original model
 model_true_pred <- predict(model_true)
 (mse_model_true <- mean((y - model_true_pred)^2))
 
-# Get MSE from model chosen
-
-model_selected <- lm(y ~ v1  + v2  + v3  + v4  + v6  + v7  + 
+# Model chosen
+model_selected_17 <- lm(y ~ v1  + v2  + v3  + v4  + v6  + v7  + 
                          v8  + v9  + v10 + v11 + v12 + v13 + 
                          v14 + v16 + v18 + v19 + v20,
                      data = data_set_full)
 
-model_selected_pred <- predict(model_selected)
+# Get MSE from model chosen
+model_selected_pred <- predict(model_selected_17)
 (mse_model_selected <- mean((y - model_selected_pred)^2))
 ```
 
-_(f) (+10 pts) Create a plot displaying $\sqrt{\sum_{j=0}^p(\beta_j - \hat \beta_j^s}^2$ where $\hat \beta_j^s$ is the jth coefficient estimate for the best model of size s using the entire data set. Comment on what you observe.How does this compare to the testing MSEb plot from part (c)?_
+_(f) (+10 pts) Create a plot displaying $\sqrt{\sum_{j=0}^p(\beta_j - \hat \beta_j^s}^2$ where $\hat \beta_j^s$ is the jth coefficient estimate for the best model of size s using the entire data set. Comment on what you observe.How does this compare to the testing MSE plot from part (c)?_
 
-https://www.kaggle.com/mahmoud86/tutorial-subset-selection-methods
+
 ```{r}
-coefficients <-
+param_dist <- c()
+  
+for (each_model in 1:20) {
   # Get the original betas
-  data.frame(parameter = colnames(best_subset_sel_summary$which), 
+  params <- data.frame(parameter = colnames(best_subset_sel_summary$which), 
                            actual = c(0, random_betas)) %>%
   
-  # Get estimated betas
-  left_join(data.frame(parameter = names(coef(best_subset_sel, id = 17)), 
-                       estimated = coef(best_subset_sel, id = 17)), 
+  # Get estimated betas from each model
+  # Get names 
+  left_join(data.frame(parameter = names(coef(best_subset_sel, 
+                                              id = each_model)),
+                       # Get values
+                       estimated = coef(best_subset_sel, id = each_model)), 
             by = "parameter") %>%
+    
   # Set to 0 the estimated betas that were not estimated
-  mutate(estimated = case_when(is.na(estimated) ~ 0, TRUE ~ estimated))
+  mutate(estimated = case_when(is.na(estimated) ~ 0, TRUE ~ estimated)) %>% 
+  filter(!parameter == "(Intercept)")
+  
+  # Calculate the parameter distance for each single model
+  param_dist[each_model] <- sqrt(sum((params$actual - params$estimated)^2))
+}
+
+
+as.data.frame(param_dist) %>% 
+    mutate(number = c(1:20)) %>% 
+      ggplot(.,aes(x = number, y = param_dist)) +
+      geom_point(size = 3) +
+      scale_x_continuous(breaks = seq(1, 20, 2)) +
+      scale_y_continuous(labels = scales::comma_format()) +
+      geom_line(col = "grey55") +
+      theme_bw()
 
 ```
+
+
+
 
 # Exercise 2
 
