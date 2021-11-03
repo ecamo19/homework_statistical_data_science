@@ -3,6 +3,7 @@ title: 'STAT 534 Statistical Data Science I: Exam I (Take-Home Portion)'
 author: "Erick Calderon-Morales"
 date: "Fall 2021"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -12,11 +13,9 @@ knitr::opts_chunk$set(echo = TRUE ,comment = "", fig.align = 'center',
 					  fig.width = 12, fig.height = 6, warning = FALSE)
 ```
 
-__Due Date:__ October 17 (Sunday)
+**Due Date:** October 17 (Sunday)
 
-__Instructions:__ There are 50 points plus 10 extra credits on this portion of the exam. You may use any reference material for your exam. However, you are not to discuss any questions about the exam with anyone other than yourself. Please contact me with any questions and I will respond as soon as possible within the same day. Be sure to write/type your answers in complete sentences and show your work. Any items including R output not commented on will receive no credit. Attach your R code as an appendix or as a separate file. (If you use R markdown, you may keep the code
-inserted inline.)
-
+**Instructions:** There are 50 points plus 10 extra credits on this portion of the exam. You may use any reference material for your exam. However, you are not to discuss any questions about the exam with anyone other than yourself. Please contact me with any questions and I will respond as soon as possible within the same day. Be sure to write/type your answers in complete sentences and show your work. Any items including R output not commented on will receive no credit. Attach your R code as an appendix or as a separate file. (If you use R markdown, you may keep the code inserted inline.)
 
 ```{r message=FALSE, warning=FALSE}
 # Packages
@@ -41,16 +40,19 @@ library(glmnet)
 library(pls)
 # For tables
 library(gt)
+# For xyplot
+library(lattice)
 ```
 
-# Exercise 1
+
+
 __1. (20+10 pts) In this problem, we will generate simulated data, and will then apply best subset selection to this data using the validation method. The goal is to explore that as model size increases, the training error will necessarily decrease, but the testing error may not.__
 
 _(a) (5 pts) Generate a data set with p = 20 predictors and n = 1000 observations according to the model:_
 
-$$Y = \beta_0\ +\ \beta_1X_1\ ...\ +\ \beta_pX_p\ +\ \epsilon $$
+$$Y = \beta_0\ +\ \beta_1X_1\ ...\ +\ \beta_pX_p\ +\ \epsilon$$
 
-where $X_j \sim N(0,1)$  and $\epsilon\ \sim N (0, 1)$ independently. Randomly select your $\beta$ values but let some elements to be exactly zero. Then split your data set into a training set containing 100 observations and a testing set containing 900 observations.
+_where_ $X_j \sim N(0,1)$ and $\epsilon\ \sim N(0, 1)$ independently. _Randomly select your_ $\beta$ values _but let some elements to be exactly zero. Then split your data set into a training set containing 100 observations and a testing set containing 900 observations._
 
 ```{r}
 set.seed(123)
@@ -78,7 +80,6 @@ x_variables <- empty_data_set
    
 ```
 
-
 ```{r}
 # Select randomly the betas and set some to zero
 random_betas <- rnorm(variables, mean = 5, sd = 10)
@@ -102,7 +103,6 @@ data_set_full <-
 
 ```
 
-
 ```{r}
 # slip data into train and test
 
@@ -117,6 +117,7 @@ nrow(data_set_train)
 data_set_test <-  data_set_full[-train_index,]
 nrow(data_set_test)
 ```
+
 ```{r}
 model_matrix_train <- model.matrix(y ~ ., data = data_set_train)
 model_matrix_test  <- model.matrix(y ~ ., data = data_set_test)
@@ -135,7 +136,6 @@ best_subset_sel <- regsubsets(y ~.,
 best_subset_sel_summary <- summary(best_subset_sel)
 ```
 
-
 ```{r}
 # Get rss and change the colname
 models_rss <- as.data.frame(best_subset_sel_summary$rss)
@@ -152,7 +152,7 @@ models_errors <- cbind(models_rss,mse_train_set)
 ggplot(data = models_errors, aes(x = c(1:20), y = mse_train_set, 
                                  color = mse_train_set))+
     geom_point() +
-    ylab("Mean squared error train set") + xlab("Number of variables") +
+    ylab("Mean squared error training set") + xlab("Number of variables") +
     theme_bw()
 ```
 
@@ -181,6 +181,8 @@ models_errors <- cbind(models_errors,mse_test_set)
 
 ```
 
+__In this case the testing set MSE take its minimum value at 17 predictors__
+
 ```{r}
 ggplot(data = models_errors, aes(x = c(1:20), y = mse_test_set, 
                                 color = mse_test_set)) +
@@ -188,7 +190,11 @@ ggplot(data = models_errors, aes(x = c(1:20), y = mse_test_set,
     ylab("Mean squared error test set") + xlab("Number of variables") +
     theme_bw()
 ```
+
 _(d) (3 pts) What do you observe about the changes in training MSE and testing MSE as model size increases?_
+
+__In this particular case, as the model size increase, the difference between MSE train and MSE test gets lower and lower until are almost the same.__
+
 ```{r}
 ggplot(data = models_errors) +
     geom_point(aes(x = c(1:20), y = mse_train_set, color = "MSE Train")) +
@@ -196,27 +202,35 @@ ggplot(data = models_errors) +
     ylab("Mean squared error test set") + xlab("Number of variables") +
     theme_bw()
 ```
-```{r}
+_(e) (3 pts) How does the model at which the testing MSE is minimized compare to the true model used to generate the data? (Hint: You want to refit the regression model to the entire data set using the selected predictors.)_
 
-plot(best_subset_sel_summary$cp ,xlab =" Number of Variables ", ylab =" Cp",type="p")
++ Select the best model
+
+```{r}
+par(mfrow = c(1,2))
+plot(best_subset_sel_summary$cp, xlab =" Number of Variables ", ylab =" Cp",type="p")
 plot(best_subset_sel_summary$bic,xlab =" Number of Variables ", ylab =" BIC ",type="p")
 ```
 
+__When I compare the coefficients predicted by the best subset model and the one used for generate the data, I observe almost no difference between each other. The best subset model is the one with 17 variables, meaning that in order to explaining the data the other three coefficients are unnecessary. This coincides with the true model since those other coefficients are the ones that equals zero.__ 
 
-
-_(e) (3 pts) How does the model at which the testing MSE is minimized compare to the true model used to generate the data? (Hint: You want to refit the regression model to the entire data set using the selected predictors.)_
 ```{r}
 coef(best_subset_sel, id = 17)
 ```
 ```{r}
+random_betas
+```
+
+__Meanwhile, when I compared the MSE of the true model with the MSE of the best subset I observed small difference, which indicates that the model with 17 variables is able to predict the y values generated by the true model. The value of MSE for the true model is virtually zero while the value of the MSE for the best subset is 0.95. This difference is mainly due to the error term epsilon included in the true model for generating the data.__
+
+```{r message=FALSE, warning=FALSE}
 # Refit the regression model to the entire data using the selected predictors
 
 # True model
-model_true <- lm(y ~ ., data = data_set_full)
+model_true <- lm(y ~ . + epsilon, data = data_set_full)
 
 # Get MSE from original model
 model_true_pred <- predict(model_true)
-(mse_model_true <- mean((y - model_true_pred)^2))
 
 # Model chosen
 model_selected_17 <- lm(y ~ v1  + v2  + v3  + v4  + v6  + v7  + 
@@ -226,11 +240,19 @@ model_selected_17 <- lm(y ~ v1  + v2  + v3  + v4  + v6  + v7  +
 
 # Get MSE from model chosen
 model_selected_pred <- predict(model_selected_17)
+```
+
+```{r}
+(mse_model_true <- mean((y - model_true_pred)^2))
 (mse_model_selected <- mean((y - model_selected_pred)^2))
 ```
 
-_(f) (+10 pts) Create a plot displaying $\sqrt{\sum_{j=0}^p(\beta_j - \hat \beta_j^s}^2$ where $\hat \beta_j^s$ is the jth coefficient estimate for the best model of size s using the entire data set. Comment on what you observe.How does this compare to the testing MSE plot from part (c)?_
 
+(f) (+10 pts) Create a plot displaying $\sqrt{\sum_{j=0}^p(\beta_j - \hat \beta_j^s}^2$ where $\hat \beta_j^s$ is the $jth$ coefficient estimate for the best model of size $s$ using the entire data set. Comment on what you observe. How does this compare to the testing MSE plot from part (c)?_
+
+__As the number of predictors increases the distance between the coefficients decreases. This happens because as the number of predictors increases the predictive capacity of the model increases too.__
+
+__Also, as the number of predictors increases the bias in the model decrease since the true relationship between the y-variable is best estimated when the number of coefficients increase.__
 
 ```{r}
 param_dist <- c()
@@ -256,7 +278,7 @@ for (each_model in 1:20) {
   param_dist[each_model] <- sqrt(sum((params$actual - params$estimated)^2))
 }
 
-
+# Plot
 as.data.frame(param_dist) %>% 
     mutate(number = c(1:20)) %>% 
       ggplot(.,aes(x = number, y = param_dist)) +
@@ -264,14 +286,11 @@ as.data.frame(param_dist) %>%
       scale_x_continuous(breaks = seq(1, 20, 2)) +
       scale_y_continuous(labels = scales::comma_format()) +
       geom_line(col = "grey55") +
-      theme_bw()
+      theme_bw() +
+      ylab("Coefficient distance") + xlab("Number of predictors")
 
 ```
 
-
-
-
-# Exercise 2
 
 __2. (30 pts) Use the UScrime data set in the MASS library to study the effect of punishment regimes on crime rates.__
 
@@ -290,8 +309,14 @@ summary(uscrime)
 
 _(a) (5 pts) Explore the variables using appropriate graphics and summary statistics. Comment on your observations._
 
+__From the plot above I observed high correlation between variables. Especially the percentage of males aged 14--24 (m), the indicator variable for a Southern state (so), gross domestic product per capita (gdp) and income inequality (ineq) are highly correlated with other variables.__
+
+__From the variables above its worth to mention that the percentage of males aged 14-24 (m) is positively correlated with the variables Southern States (so),number of non-whites per 1000 people (nw) and income inequality. While is negatively correlated with the variables mean years of schooling (Ed), police expenditure in 1960 (Po1) police expenditure in 1959 (Po2) and gdp. While the variable income inequality is negatively correlated with gdp, Po1, Po2 and ed and positively correlated with nw, so and m.__
+
+__Finally I noticed that the y-variable is skew so in order to correct this I log transform this variable.__
+
 ```{r}
-# Nice visualization of correlations
+# Visualization of correlations
 correlations <- 
   uscrime %>%
     ggcorr(geom = "blank", label = TRUE, hjust = 0.75) +
@@ -308,10 +333,6 @@ y_density <- ggplot(uscrime, aes(x = y)) + geom_density()
 ```{r}
 cowplot::plot_grid(y_density,correlations)
 ```
-From the plot above I observed high correlation between variables. Especially the percentage of males aged 14–24 (m), the indicator variable for a Southern state (so), gross domestic product per capita (gdp) and income inequality (ineq) are highly correlated with other variables.
-
-From the variables above its worth to mention that the percentage of males aged 14–24 (m) is positively correlated with the variables Southern States (so),number of non-whites per 1000 people (nw) and income inequality. While is negatively correlated with the variables mean years of schooling (Ed), police expenditure in 1960 (Po1) police expenditure in 1959 (Po2) and gdp. While the variable income inequality is negatively correlated with gdp, Po1, Po2 and ed and positively correlated with nw, so and m.
-
 
 ```{r}
 uscrime <- 
@@ -321,10 +342,8 @@ uscrime <-
            log_y = log(y)) %>% 
     dplyr::select(-y)
 ```
- 
 
 _(b) (12 pts) Split the data into 75% training and 25% testing and build the following models using the training set:_
-
 
 ```{r}
 # slip data into train and test
@@ -351,8 +370,10 @@ x_vars_test <- model.matrix(log_y ~., data = uscrime_test)[,-1]
 
 ```
 
+-   Multiple linear regression
 
-+ Multiple linear regression
+__The best subset model is the one with 6 variables__
+
 ```{r}
 mult_reg_train <- regsubsets(log_y ~., nvmax = 16, 
                              nbest = 1,
@@ -362,57 +383,71 @@ mult_reg_train <- regsubsets(log_y ~., nvmax = 16,
 mult_reg_train_summary <- summary(mult_reg_train)
 ```
 
+
+
 ```{r}
 # Select best multiple regression model
+par(mfrow = c(1,2))
 plot(mult_reg_train_summary$cp , xlab =" Number of Variables ", ylab =" Cp",type="p")
 plot(mult_reg_train_summary$bic, xlab =" Number of Variables ", ylab =" BIC ",type="p")
 ```
+
 ```{r}
 coef(mult_reg_train, id = 6)
 ```
 
 ```{r}
-# Refit the model
+# Refit the best subset model
 best_mult_reg_train <- lm(log_y ~ m + so + ed + po1 + ineq + time,  
                           data = uscrime_train)
 ```
 
+-   Ridge regression
 
+__The best Ridge model is the one with 15 variables__
 
-+ Ridge regression
 ```{r}
 ridge_uscrimes_train <- cv.glmnet(x_vars_train, y_var_train, alpha = 0)
 ```
+
 
 ```{r}
 plot(ridge_uscrimes_train)
 ```
 
+-   Lasso regression
 
-+ Lasso regression
+__The best LASSO model is the one with 2 variables__
+
+
 ```{r}
 lasso_uscrimes_train <- cv.glmnet(x_vars_train, y_var_train, alpha = 1)
 ```
+
 
 ```{r}
 plot(lasso_uscrimes_train)
 ```
 
-+ Principal components regression (justify how many principal components should be used)
+-   Principal components regression (justify how many principal components should be used)
+
+__I chose 5 components for the principal component regression since the value of MSEP start to stabilize after 5 components__
+
+
 ```{r}
 pcr_uscrimes_train <- pcr(log_y ~ ., data = uscrime_train, 
                           scale = TRUE , 
                           validation = "CV")
 ```
 
-
 ```{r}
 validationplot(pcr_uscrimes_train, val.type = "MSEP", type = "p")
 ```
-I choose to use 5 components for the principal component regression since the value of MSEP start to stabilize after 5 components 
 
+-   Partial least squares (justify how many directions should be used)
 
-+ Partial least squares (justify how many directions should be used)
+__I chose 3 components for the partial least squared regression since it has the lowest MSEP value.__
+
 ```{r}
 pls_uscrimes_train <- plsr(log_y ~ ., data = uscrime_train, 
                           scale = TRUE , 
@@ -422,13 +457,11 @@ pls_uscrimes_train <- plsr(log_y ~ ., data = uscrime_train,
 ```{r}
 validationplot(pls_uscrimes_train, val.type = "MSEP", type = "p")
 ```
-I choose to use 3 components for the partial least squared regression since it has the lowest MSEP value.
-
 
 _(c) (5 pts) Compare the effectiveness of each model on training vs. testing data._
 
- 
-+ Multiple linear regression MSE
+-   Multiple linear regression MSE
+
 ```{r}
 # Training error
 mult_mse_train <- summary(best_mult_reg_train)$sigma^2
@@ -439,7 +472,8 @@ mult_pred <- predict(best_mult_reg_train, newx = uscrime_test)
 mult_mse_test <- mean((mult_pred - y_var_test)^2)
 ```
 
-+ Ridge regression MSE
+-   Ridge regression MSE
+
 ```{r}
 # MSE train
 ridge_pred_train <- predict(ridge_uscrimes_train, 
@@ -457,7 +491,8 @@ ridge_pred_test <- predict(ridge_uscrimes_train,
 ridge_mse_test <- mean((ridge_pred_test - y_var_test)^2) 
 ```
 
-+ Lasso regression MSE
+-   Lasso regression MSE
+
 ```{r}
 
 # MSE train
@@ -476,7 +511,8 @@ lasso_pred_test <- predict(lasso_uscrimes_train,
 lasso_mse_test <- mean((lasso_pred_test - y_var_test)^2) 
 ```
 
-+ PCR MSE
+-   PCR MSE
+
 ```{r}
 # Train error
 pcr_pred_train <- predict(pcr_uscrimes_train, data = uscrime_train, ncomp = 5)
@@ -487,7 +523,8 @@ pcr_pred_test <- predict(pcr_uscrimes_train, uscrime_test, ncomp = 5)
 pcr_mse_test <- mean((pcr_pred_test - y_var_test)^2)
 ```
 
-+ PLSR MSE
+-   PLSR MSE
+
 ```{r}
 # Train error
 pls_pred_train <- predict(pls_uscrimes_train, data = uscrime_train, ncomp = 3)
@@ -498,9 +535,10 @@ pls_pred_test <- predict(pls_uscrimes_train, uscrime_test, ncomp = 3)
 pls_mse_test <- mean((pls_pred_test - y_var_test)^2)
 ```
 
+*Table 1: Models MSE*
 
+__Based on which model has the lowest mse test value and the lowest difference between mse test and mse train I decided to choose the Ridge model and the Principal component regression model with 5 components.__
 
-_Table 1: Models MSE_
 ```{r}
 tribble(
 ~model, ~mse_train, ~mse_test,~difference,
@@ -512,22 +550,20 @@ tribble(
 ) %>% gt()
 ```
 
-Based on which model has the lowest mse test value and the lowest difference between mse test and mse train I decided to choose the Ridge model and the Principal component regression model with 5 components.  
 
-_(d) (8 pts) Select the best two models from above. Interpret and compare their respective final fitted models._
+_(d) (8 pts) Select the best two models from above._
 
-+ Refit Ridge model to the entire data set
+-   Refit Ridge model to the entire data set
+
 ```{r}
 x_variables_uscrime <- model.matrix(log_y ~., data = uscrime)[,-1]
 y_variable_uscrime <- uscrime$log_y
 
-ridge_uscrimes <- cv.glmnet(x_variables_uscrime, y_variable_uscrime, 
-                                  alpha = 0)
-
-coef(ridge_uscrimes)
+ridge_uscrimes <- cv.glmnet(x_variables_uscrime, y_variable_uscrime, alpha = 0)
 ```
 
-+ Refit PCR model to the entire data set
+-   Refit PCR model to the entire data set
+
 ```{r}
 pcr_uscrimes <- pcr(log_y ~ ., ncomp = 5,
                           scale = TRUE ,
@@ -536,4 +572,128 @@ pcr_uscrimes <- pcr(log_y ~ ., ncomp = 5,
 summary(pcr_uscrimes)
 pcr_uscrimes[["coefficients"]][,,1]
 ```
+
+
+_(d.1) Interpret and compare their respective final fitted models_
+
++ PCR 
+
+__Overall, the 5 principal components explains 86% of the variability in the data and 60% of the variability in the y-variable. I do not observe any violation of the model's assumptions since I do not detect any pattern in the residuals vs predicted plot.__
+
+```{r}
+summary(pcr_uscrimes)
+```
+
+```{r}
+xyplot(resid(pcr_uscrimes) ~ predict(pcr_uscrimes), type = c("p", "g"),
+       xlab = "Predicted", ylab = "Residuals")
+```
+
+__The predicted vs observed shows a linear relation which I considered is not good enough so I question the actual predictive power of the model. Also, when the y-variable is plot against each principal component, it seems that there is not relationship between the rate of crimes and any principal component.__  
+
+```{r}
+predplot(pcr_uscrimes)
+```
+```{r}
+pc1 <- xyplot(y_variable_uscrime ~ pcr_uscrimes$projection[,1], type = c("p", "g"))
+```
+
+```{r}
+pc2 <- xyplot(y_variable_uscrime ~ pcr_uscrimes$projection[,2], type = c("p", "g"))
+```
+
+```{r}
+pc3 <-xyplot(y_variable_uscrime ~ pcr_uscrimes$projection[,3], type = c("p", "g"))
+```
+
+```{r}
+pc4 <-xyplot(y_variable_uscrime ~ pcr_uscrimes$projection[,4], type = c("p", "g"))
+```
+
+```{r}
+pc5 <- xyplot(y_variable_uscrime ~ pcr_uscrimes$projection[,5], type = c("p", "g"))
+```
+
+```{r}
+plot_grid(pc1,pc2,pc3,pc4,pc5)
+```
+
+__Given the social nature of the data set and the importance of drawing conclusions for understanding the effect of punishment regimes on crime rates in United States of America, I consider that the PCR model is inadequate for understanding this problem. The main drawbacks of this model reside in the difficulty for drawing any conclusions. As showed above, it seems that none of the principal components relate to the y-variable. Also I consider this model inadequate for this data since the number of predictors (15) is not larger than the number of observation(47).__
+
++ Ridge regression
+
+__Even though the PCR has a lower MSE error (0.065) I consider the Ridge regression a better solution to understanding the effect of punishment regimes on crime rates compared to PCR. This because in this data set is more important to infer which predictors are related with crime rates than predict future values.__
+
+```{r}
+ridge_pred_full <- predict(ridge_uscrimes, 
+                            s = ridge_uscrimes$lambda.1se,
+                            newx = x_variables_uscrime)
+
+pcr_pred_full <- predict(pcr_uscrimes, data = uscrime, ncomp = 5)
+
+
+# MSE 
+(pcr_mse_full <- mean((pcr_pred_full - y_variable_uscrime)^2))
+(ridge_mse_full <- mean((ridge_pred_full - y_variable_uscrime)^2))
+
+```
+
+__The main problem of this data set is that some predictors showed high correlation between each other. This problem is solved in the Ridge regression by adding a penalty term that shrinks towards zero some coefficients.__
+
+```{r fig.width = 7, fig.height = 5} 
+coefs_ridge <- as.data.frame(coef(ridge_uscrimes)[-1,])
+colnames(coefs_ridge) <- "coef_value"
+
+coefs_ridge %>% 
+  rownames_to_column(var = "coefficient") %>% 
+    ggplot(data = ., aes(x = factor(coefficient), y = coef_value)) +
+    geom_point(fill = "#ed3324", color = "white", size = 4, shape = 21) + 
+    geom_hline(aes(yintercept = 0),linetype = 6) +
+    theme_bw() +
+    coord_flip() +
+    ylab("Coefficient value") + xlab("Predictors")
+```
+
+
+__From all the variables in the model it seems that only the probability of imprisonment(prob) and indicator variable for a Southern state(so) are important to explain the crime rates.__
+
+__It seems that a lower probability of imprisonment leads to higher rates of crime. Specifically for each unit increase in the probability of imprisonment the crime rate decreases by 90%, while being or not in a Southern state increase by 7% the crime rates.__
+
+```{r}
+# Percent increase or decrease in the response for every one-unit increase in the independent variable.
+# For every one-unit increase in the independent variable
+(exp(-2.3772447459)-1)*100
+```
+
+```{r}
+# Percent increase or decrease in the response for every one-unit increase in the independent variable.
+# For every one-unit increase in the independent variable
+(exp(0.0765351706)-1)*100
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
