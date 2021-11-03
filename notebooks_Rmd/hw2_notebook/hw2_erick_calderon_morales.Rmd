@@ -1,0 +1,404 @@
+---
+title: 'STAT 534: Homework 2'
+author: "Erick Calderon-Morales"
+date: 'Fall 2021'
+due_date: "Wednesday, September 22, 12:30 pm"
+output: 
+  rmdformats::material:
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment = "", fig.align = 'center',
+					  fig.width = 11, fig.height = 7)
+```
+
+```{r knitr, include = FALSE}
+
+# Save figures in specific place
+knitr::opts_chunk$set(autodep        = TRUE,
+                      cache          = FALSE,
+                      cache.comments = TRUE,
+                      
+                      # Include code?
+                      echo           = TRUE,
+                      
+                      error          = FALSE,
+                      fig.align      = "center",
+                      
+                      # Path to where to store pdf single figures 
+                      fig.path       = paste0("hw2_figures", "/"),
+                      fig.width      = 11,
+                      fig.height     = 7,
+                      message        = FALSE,
+                      warning        = FALSE)
+```
+
+```{r cleanup-docs, cache = FALSE,echo = FALSE}
+
+# save a html copy file in a specific place
+doc.files <- c(list.files(pattern = "pdf"),
+               list.files(pattern = "html"),
+               list.files(pattern = "docx"))
+
+for (file in doc.files) {
+    file.rename(file, file.path("../../hw2/", file))
+}
+```
+
+# Packages
+
+```{r libaries, message=FALSE, warning=FALSE, cache=FALSE}
+library(nycflights13)
+library(mosaicData)
+library(janitor)
+library(tidyr)
+library(broom)
+library(mdsr)
+library(RColorBrewer)
+library(osmdata)
+library(ggmap)
+library(zipcodeR)
+library(tidyverse)
+library(paletteer)
+library(gt)
+
+```
+
+# 1. Use the nycflights13 package to answer the following questions:
+
+**(a) (Excerpted from Problem 4.9 in textbook) Use the flights table. What month had the highest proportion of cancelled flights (flights with missing departure/arrival delay time)? What month had the lowest? Interpret any seasonal patterns.**
+
+Here I defined a cancelled flights as a flight that never left, didn't have any air time and that never arrived to its destination.
+
+```{r}
+# Find data with na's
+cancelled_flights <-
+    flights %>% 
+    filter(is.na(flights$dep_time) & is.na(flights$arr_time) & 
+               is.na(flights$air_time)) %>% 
+    select(month,day,arr_time,air_time,dep_time)
+```
+
+```{r}
+
+#Find flights cancelled
+number_flights_cancelled <- 
+  cancelled_flights %>% 
+  group_by(month) %>% 
+  summarise(n_flights_cancelled = n())
+
+# Find total_number_flights
+total_number_flights <- 
+  flights %>% 
+  group_by(year,month) %>% 
+  summarise(n_flights_total = n())
+
+# Join tables
+proportion_flights_cancelled <-
+  inner_join(number_flights_cancelled,total_number_flights,
+             by = c("month"))
+
+
+```
+
+```{r}
+
+proportion_flights_cancelled %>%
+    mutate(proportion_flight_cancelled = 
+                 ((n_flights_cancelled/n_flights_total))) %>% 
+    round(2) %>% 
+    arrange(desc(proportion_flight_cancelled)) %>% 
+    rename(Month = "month",flights_cancelled = "n_flights_cancelled",
+           Total_flights = "n_flights_total",
+           Proportion_flights_cancelled = "proportion_flight_cancelled") %>%
+    select(year,everything()) %>% 
+    gt() %>% 
+    fmt_percent(Proportion_flights_cancelled, decimals = 0)
+```
+
+
++ The month with the highest proportion of cancelled flights was February probably because of winter conditions and the month with the lowest was October.
+
+**(b) Challenge: Use the weather table. On how many days was there precipitation in the New York area for each month in 2013? What do you observe in combine with the results from part (a)? (Hint: the distinct function in dplyr can be useful.)**
+
+```{r message=FALSE, warning=FALSE}
+
+weather %>% 
+  group_by(year,month,day) %>% 
+  mutate(
+        origin = as.factor(origin),
+        year = as.factor(year),
+        month = as.factor(month),
+        day = as.factor(day),
+        hour = as.factor(hour)) %>% 
+    summarize(across(where(is.numeric), mean , na.rm = T)) %>% 
+    filter(precip > 0) %>% 
+    group_by(month) %>% 
+    summarise(days_with_rain = n()) %>% 
+    arrange(desc(days_with_rain)) %>% 
+    rename(Month = "month",Days_with_rain = "days_with_rain") %>% 
+    gt() 
+```
+
+**(Excerpted from Problem 5.4 in textbook) Use the flights and plane tables. What is the oldest plane (specified by the tailnum variable) that flew from New York City airports in 2013**
+
+```{r}
+
+flights %>%
+  select(-year) %>% 
+      inner_join(planes, by = c('tailnum' = 'tailnum')) %>% 
+      select(tailnum,year, everything()) %>% 
+      group_by(tailnum,year) %>% 
+      summarise(Mean_airtime = mean(air_time)) %>%
+      arrange(year) %>% 
+      drop_na() %>% 
+      head(5)
+```
+
++ The oldest plane is N381AA
+
+# 2. Use the mosaicData package to answer the following questions:
+
+**(a) (Excerpted from Problem 6.6 in textbook) The HELPfull data contains information about the Health Evaluation and Linkage to Primary Care (HELP) randomized trial in tall format. Create a table that each row displays the DRUGRISK and SEXRISK scores at the baseline and 6 months for a subject ID. (Hint: See the textbook for breakdown steps.)**
+
+```{r}
+# Load data
+data("HELPfull")
+```
+
+```{r}
+
+HELPfull %>% 
+    clean_names()  %>% 
+    filter(id == 1) %>% 
+    filter(time %in% c(0,6)) %>% 
+    pivot_longer(cols = c(drugrisk,sexrisk), 
+                 names_to = "type_of_risk", 
+                 values_to = "risk_score") %>% 
+    select(id,type_of_risk,risk_score,time,everything()) %>% 
+    arrange(type_of_risk) %>% 
+    select(1:9) %>% 
+    gt()
+
+
+```
+
+**(b) (Excerpted from Problem 7.3 in textbook) Use the purrr::map() function and the HELPrct data frame to fit a regression model predicting *cesd* as a function of *age* separately for each of the levels of the substance variable. Generate a list of results (estimates and confidence intervals) for the slope parameter for each level of the grouping variable. (Hint: The tidy() function with the option conf.int = T computes confidence intervals for a lm() object.)**
+
+```{r}
+table <- 
+HELPfull %>%
+    clean_names() %>% 
+    select(ces_d,age,secd_sub) %>% 
+    na.omit() %>% 
+    mutate(secd_sub = as.factor(secd_sub)) %>%
+    nest(data = -secd_sub) %>% 
+    mutate(
+      fit = map(data, ~ lm(ces_d ~ age, data = .x)),
+      tidied = map(fit, tidy, conf.int =T)) %>% 
+    unnest(tidied) %>% 
+    select(-c(data,fit)) %>% 
+    filter(term %in% "age") %>% 
+    clean_names() %>% 
+    arrange(secd_sub) %>% 
+    drop_na() 
+
+levels(table$secd_sub) <- c("None","Alcohol","Cocaine" ,
+                            "Heroine","Barbituates", "Benzos", 
+                             "Marijuana", "Methadone", "Opiates")
+ 
+```
+
+```{r}
+table %>% gt()
+```
+
+# 3. Health Care Coverage Data
+
+**(a) Read the dataset from [CSVs hosted on GitHub](https://raw.githubusercontent.com/opencasestudies/ocs-healthexpenditure/master/data/KFF/healthcare-coverage.csv) using read_csv().(Hint: you want to skip the first two lines with the *skip* option and read up to the 52nd state with the n_max option.)**
+
+```{r}
+
+link <- "https://raw.githubusercontent.com/opencasestudies/ocs-healthexpenditure/master/data/KFF/healthcare-coverage.csv"
+
+data_csv <-  
+    read.csv(file = link, skip = 2, nrows = 52, 
+             na.strings = "N/A")  %>% 
+    clean_names() 
+    
+
+# Remove x from colnames
+colnames(data_csv) <- sub("^x", "", colnames(data_csv))
+```
+
+**(b) Convert all year-based columns to integer using mutate(across(...)) . (Hint: Read Section 7.2 in the textbook for the across() function.)**
+
+```{r}
+data_csv <- 
+  data_csv %>%   
+      mutate(across(starts_with("201"), as.integer))
+```
+
+**(c) Further tidy the dataset and convert it to a long data format as shown below.**
+
+```{r}
+data_csv <- 
+    data_csv %>%
+        pivot_longer(-location, names_to = "year", 
+                     values_to = "tot_coverage") %>% 
+        separate(year,c("year","type"),extra = "merge") %>% 
+        mutate(year = factor(year),
+               type = factor(type),
+               type = str_to_sentence(type))
+
+data_csv$type <-  sub("_", "-", data_csv$type)
+
+head(data_csv, 10) %>% 
+  gt()
+```
+
+# 4. Challenge
+
+**The Violations data set in the mdsr package contains information regarding the outcome of health inspections of restaurants in New York City. The ViolationCodes data set includes violation description and classification of critical violations (violations that are most likely to contribute to foodborne illness). See original data source for more information: [NYC Open Data](https://data.cityofnewyork.us/Health/DOHMH-New-York-City-Restaurant-Inspection-Results/43nn-pn8j/). Use these data to calculate, by zip code, the average number of inspections per restaurant and the rate of critical violations. What pattern do you see between the average number of inspections per restaurant and the rate of critical violations? (Hint: Note that an inspection can appear across several rows in the Violations data set if multipleviolations were associated with the inspection. The rate of critical violations should be defined as the rate of inspections that result in at least one critical violation.)**
+
+
+```{r}
+# Load data
+data("ViolationCodes")
+data("Violations")
+```
+
+
++ Data Aggregation process
+```{r}
+# Join ViolationCodes and Violations datasets
+
+data_nyc_restaurants <- 
+    inner_join(ViolationCodes,Violations, 
+             by = c("violation_code" = "violation_code")) %>% 
+    
+    # Clean dataset delete columns
+    select(-c(violation_description,cuisine_code,phone,action,
+              street,grade_date,boro,record_date,
+              grade,inspection_type,violation_code,building))  %>% 
+    
+    drop_na() %>% 
+    mutate(across(where(is.character), as.factor),
+           camis = factor(camis)) %>% 
+    select(zipcode,camis,dba,inspection_date,everything()) %>% 
+    arrange(zipcode,camis,inspection_date)  
+```
+
+```{r}
+data_per_rest <-
+        data_nyc_restaurants %>% 
+        drop_na() %>% 
+        group_by(zipcode,camis,inspection_date) %>%
+        
+        #Create critical flags column
+        mutate(n_critical_flags = 
+                   ifelse(critical_flag == "Critical",TRUE,FALSE)) %>%
+        filter(n_critical_flags > 0) %>% 
+    
+        summarise(number_of_critical_flags = 
+                    sum(n_critical_flags == 'TRUE'),
+                score = mean(score)) %>% 
+      
+        arrange(zipcode,camis)
+```
+
+```{r}
+data_number_visits_per_rest <- 
+    data_per_rest %>%
+        # How many times a restaurant was visit?
+        group_by(zipcode,camis) %>%
+        summarise(number_visits = n(),
+                  mean_score = mean(score),
+                  total_number_of_critical_flags = 
+                      sum(number_of_critical_flags)) %>% 
+  
+        arrange(zipcode,camis) %>% 
+        select(zipcode,camis,
+               total_number_of_critical_flags,everything())
+```
+
+```{r}
+data_agregated_by_zipcode <-
+    data_number_visits_per_rest %>% 
+    #select(-camis) %>% 
+    group_by(zipcode) %>% 
+    summarise(mean_inspector_visits = mean(number_visits),
+              mean_inspector_score = mean(mean_score),
+              mean_critical_violations = 
+                  mean(total_number_of_critical_flags) ) %>% 
+    arrange(zipcode)  
+    
+
+```
+
++ Average number of inspections per restaurant **by zip code** and the rate of critical violations.
+
+```{r}
+data_agregated_by_zipcode %>% 
+    head(10)
+```
+
+**What pattern do you see between the average number of inspections per restaurant and the rate of critical violations? (Hint: Note that an inspection can appear across several rows in the Violations data set if multiple violations were associated with the inspection)**
+
+```{r}
+ggplot(data = data_agregated_by_zipcode ,
+       aes(x = mean_inspector_visits, y = mean_critical_violations)) +
+    geom_point() +
+    geom_smooth(method = lm) +
+    theme(axis.text.y  = element_text(size = 14),
+                # Legend position and Axis size 
+
+        axis.text.x   = element_text(size = 14),
+        axis.title.y  = element_text(size = 14),
+        axis.title.x  = element_text(size = 14),
+        # Add borders to the plot
+        panel.border = element_rect(colour = "black", 
+                                    fill= NA,size = 1.3)) +
+    ylab("Critical Violations") + xlab("Inspector Visits")
+    
+```
+
+```{r}
+# Get lat long for each zipcode
+zip_long_lat <- geocode_zip(data_agregated_by_zipcode$zipcode) %>% 
+        mutate(zipcode = as.integer(zipcode))
+
+```
+
+```{r}
+# Join agregated data and lat long data
+nyc <- 
+    inner_join(data_agregated_by_zipcode,zip_long_lat, 
+                  by = c("zipcode" = "zipcode")) %>%
+    select(zipcode, lat,lng, everything()) %>% 
+    drop_na()
+```
+
+
+```{r}
+# Get map and set palette
+nyc_map <- get_map(getbb("New York"), maptype = "toner-background")
+my_palette <- colorRampPalette(rev(brewer.pal(11, "Spectral")))
+```
+
+```{r,fig.height=15,fig.width=15}
+
+ggmap(nyc_map) +
+  geom_point(data = nyc, aes(x = lng, y = lat, 
+                             color = mean_critical_violations),
+             size = 9) +
+  scale_colour_gradientn(colours = my_palette(10), limits=c(1, 22)) +
+  theme(legend.position = "bottom",
+        legend.key.size = unit(2, 'cm'),
+        legend.title = element_text(size=30),
+        legend.text = element_text(size=30)) +
+    labs(color = 'Critical \n Violations')
+```
+
+

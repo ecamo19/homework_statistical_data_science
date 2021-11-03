@@ -1,0 +1,319 @@
+---
+title: 'STAT 534: Homework '
+author: "Erick Calderon-Morales"
+date: 'Fall 2021'
+due_date: ""
+output:
+  prettydoc::html_pretty:
+    highlight: pygments
+    theme: cayman
+    toc: yes
+    number_sections: no
+    toc_depth: 1
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment = "", fig.align = 'center',
+					  fig.width = 15, fig.height = 10)
+```
+
+
+
+```{r knitr, include = FALSE}
+
+# Save figures in specific place
+
+knitr::opts_chunk$set(autodep        = TRUE,
+                      cache          = FALSE,
+                      cache.comments = TRUE,
+                      
+                      # Include code?
+                      echo           = TRUE,
+                      
+                      error          = FALSE,
+                      fig.align      = "center",
+                      
+                      # Path to where to store pdf single figures
+                      fig.path       = paste0("hw4_figures", "/"),
+                      fig.width      = 11,
+                      fig.height     = 7,
+                      message        = FALSE,
+                      warning        = FALSE)
+```
+
+
+```{r cleanup-docs, cache = FALSE,echo = FALSE}
+
+# save a html copy file in a specific place
+doc.files <- c(list.files(pattern = "pdf"),
+               list.files(pattern = "html"),
+               list.files(pattern = "docx"))
+
+for (file in doc.files) {
+    file.rename(file, file.path("../../hw4/", file))
+}
+```
+
+
+```{r libaries, message=FALSE, warning=FALSE, cache=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(MASS)
+library(janitor)
+library(GGally)
+library(pls)
+library(leaps)
+library(glmnet)
+```
+
+
+# 1. Using the Boston dataset from the MASS package, the goal is to predict the crime rate by the other variables.
+
+```{r}
+# load data
+data(Boston)
+
+Boston <- Boston %>% 
+  # Transform to factor
+  mutate(across(where(is.integer), as.factor)) %>% 
+  clean_names() %>% 
+  drop_na()
+
+str(Boston)
+```
+
+
+## (a) Create bivariate plots to explore relations between variables. Comment on your observations. (Hint: you may use ggpair() and remember to factorize any categorical variables.)
+
+
+```{r}
+Boston %>%
+  select_if(is.numeric) %>% 
+  ggpairs(lower = list(continuous = wrap("smooth", alpha = 0.3, size = 0.1)))
+```
+
+For the variables explored, all have a significant correlation with crime, being nox, indus, tax and lstat the ones with the highest positive correlation.   
+
+
+## (b) Log-transform the crime rate and repeat part (a).
+
+```{r}
+Boston %>% 
+  mutate(across(where(is.integer), as.factor)) %>% 
+  mutate(log_crime = log(crim)) %>%
+  dplyr::select(-crim) %>% 
+  clean_names() %>% 
+  select_if(is.numeric) %>% 
+  ggpairs(lower = list(continuous = wrap("smooth", alpha = 0.3, size = 0.1)))
+
+```
+
+
+## (c) Create a correlation matrix of all the continuous variables and make comments. (Hint: you may use ggcorr())
+
+```{r}
+# Nice visualization of correlations
+Boston %>% 
+  mutate(across(where(is.integer), as.factor)) %>% 
+  clean_names() %>% 
+  select_if(is.numeric) %>%
+  ggcorr(geom = "blank", label = TRUE, hjust = 0.75) +
+    geom_point(size = 10, aes(color = coefficient > 0, alpha = abs(coefficient) > 0.5)) +
+    scale_alpha_manual(values = c("TRUE" = 0.25, "FALSE" = 0)) +
+    guides(color = FALSE, alpha = FALSE)
+    
+```
+
+## (d) Split the data into training and testing subsets.
+```{r}
+set.seed (666)
+
+# Get y and model matrix 
+x_boston <- model.matrix(crim ~ . ,Boston)[, -1]
+y_boston <- Boston$crim
+
+# Create the training data 80% training 
+train_boston <- sample(1:nrow(x_boston), 0.80*nrow(x_boston)) 
+
+# Create the test data 25%
+test_boston <- (-train_boston)
+
+# Check percentages
+# Train
+(nrow(x_boston[train_boston,])/nrow(Boston))*100
+
+# Test
+(nrow(x_boston[test_boston,])/nrow(Boston))*100
+
+# Response variable from train and test datasets
+y_test <- y_boston[-train_boston]
+y_train <- y_boston[train_boston]
+```
+
+
+## (e) Build the following models using the training set:
+
++ __Multiple linear regression__
+
+```{r}
+multiple_lm <- lm(crim ~ ., data = Boston[train_boston,])
+```
+
+
++ __Principal Components Regression (indicate how many principal components are selected)__
+```{r}
+pcr_fit_crime <- pcr(crim ~ ., 
+                 subset = train_boston, 
+                 scale = TRUE, 
+                 validation = "CV",
+                 data = Boston )
+
+summary(pcr_fit_crime)
+```
+
+In this case the lowest CV value (6.624) was obtained with 19 principal components
+
+
++ __Partial Least Squares (indicate how many directions are selected)__
+
+```{r}
+set.seed (666)
+pls_fit_crime <- plsr(crim ~ ., 
+                     subset = train_boston,
+                     scale = TRUE,
+                     validation = "CV",
+                     data = Boston)
+summary(pls_fit_crime)
+```
+
+In this case the lowest CV value (1.975) was obtained with 14 directions
+
++ __lasso__
+```{r}
+lasso_fit <- cv.glmnet(x_boston[train_boston,], y_boston[train_boston], alpha = 1)
+```
+
+
+## (f) Compare the effectiveness of each model on training vs. testing data. Which model is the best?
+
++ __Multiple linear model__
+```{r}
+pred_lm <- predict(multiple_lm, Boston[test_boston,])
+
+lm_train_error <- summary(multiple_lm)$sigma^2
+lm_test_error <- mean((pred_lm - y_test)^2)
+
+
+print(paste0("Train error:",round(lm_train_error,3)))
+print(paste0("Test error:",round(lm_test_error,3)))
+
+```
+
++ __Principal Components Regression__ 
+
+```{r}
+pcr_pred <- predict(pcr_fit_crime, Boston[test_boston,], ncomp = 19)
+
+pcr_train_error <- mean(pcr_fit_crime$residuals^2)
+pcr_test_error <- mean((pcr_pred - y_test)^2)
+
+print(paste0("Train error:",round(pcr_train_error,3)))
+print(paste0("Test error:",round(pcr_test_error,3)))
+
+```
+
++ __Partial Least Squares__
+
+```{r}
+pls_pred <- predict(pls_fit_crime, Boston[test_boston,], ncomp = 14)
+
+pls_train_error <- mean(pls_fit_crime$residuals^2)
+pls_test_error <- mean((pls_pred - y_test)^2)
+
+
+print(paste0("Train error:",round(pls_train_error,3)))
+print(paste0("Test error:",round(pls_test_error,3)))
+```
++ __lasso__
+     
+```{r}
+best_lambda <- lasso_fit$lambda.min
+lasso_pred_train <- predict (lasso_fit , s = best_lambda , newx = x_boston[train_boston,])
+lasso_pred_test <- predict (lasso_fit , s = best_lambda , newx = x_boston[test_boston,])
+
+lasso_train_error <- mean((lasso_pred_train - y_train)^2)
+lasso_test_error <- mean((lasso_pred_test - y_test)^2)
+
+
+print(paste0("Train error:",round(lasso_train_error,3)))
+print(paste0("Test error:",round(lasso_test_error,3)))
+```
+
+Which model is the best? In this case, the best model with the lowest MSE is the 
+lasso model (MSE =  37.374)
+
+## (g) Refit the principal components regression model and the lasso model to the entire dataset. Comment on the differences between the two methods. (Hint: also pay attention to highly correlated variables that you found in part (c).)
+
++ __Principal Components Regression full dataset__
+```{r}
+pcr_fit_full_crime <- pcr(crim ~ .,
+                 scale = TRUE, 
+                 validation = "CV",
+                 data = Boston )
+
+summary(pcr_fit_full_crime)
+```
+
++ __lasso full dataset__
+```{r}
+lasso_fit_full <- cv.glmnet(x_boston, y_boston, alpha = 1)
+best_lambda_full <- lasso_fit_full$lambda.min
+lasso_pred_full <- predict(lasso_fit_full , s = best_lambda_full, 
+                           newx = x_boston)
+```
+
+
+
+```{r}
+# MSE comparison Lasso vrs PCR
+
+# MSE PCR
+(pcr_full_data_error <- mean(pcr_fit_full_crime$residuals^2))
+
+# MSE Lasso
+(lasso_full_data_error <- mean((lasso_pred_full - y_boston)^2))
+
+```
+
+
+###Comment on the differences between the two methods. (Hint: also pay attention to highly correlated variables that you found in part (c)
+
+PCR is an approach that can be useful when the number of variables is a lot greater than the number of observations (p >> n) and when the variables are highly correlated between each other. With this approach it is possible to reduce the number of variables (dimension reduction) to a few M components that are independent from each other that can expalin the variability in the dataset. 
+
+The main difference between the PCR and the LASSO is the latter can perform variable selection which can facilitate model interpretation, while PCR only performs dimention reduction.  
+
+
+## (h) Refit the partial least squares model to the entire dataset, and compare with the principal components regression model.
+
+```{r}
+pls_fit_full_crime <- plsr(crim ~ .,
+                     scale = TRUE,
+                     validation = "CV",
+                     data = Boston)
+summary(pls_fit_crime)
+```
+
+
+```{r}
+# MSE comparison PLS vrs PCR
+
+# MSE PCR
+(pcr_full_data_error <- mean(pcr_fit_full_crime$residuals^2))
+
+# MSE Lasso
+(pls_full_data_error <- mean(pls_fit_full_crime$residuals^2))
+```
+
+
+When compared, PLS have lower MSE than PCR

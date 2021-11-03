@@ -1,0 +1,156 @@
+---
+title: 'STAT 534: Homework 5 '
+author: "Erick Calderon-Morales"
+date: ' Fall 2021'
+due_date: ""
+output:
+  prettydoc::html_pretty:
+    highlight: pygments
+    theme: cayman
+    toc: yes
+    number_sections: no
+    toc_depth: 1
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment = "", fig.align = 'center',
+					  fig.width = 11, fig.height = 7)
+```
+
+```{r knitr, include = FALSE}
+
+# Save figures in specific place
+
+knitr::opts_chunk$set(autodep        = TRUE,
+                      cache          = FALSE,
+                      cache.comments = TRUE,
+                      
+                      # Include code?
+                      echo           = TRUE,
+                      
+                      error          = FALSE,
+                      fig.align      = "center",
+                      
+                      # Path to where to store pdf single figures
+                      fig.path       = paste0("../hw5_notebook/hw5_figures", "/"),
+                      fig.width      = 11,
+                      fig.height     = 7,
+                      message        = FALSE,
+                      warning        = FALSE)
+```
+
+
+```{r cleanup-docs, cache = FALSE,echo = FALSE}
+
+# save a html copy file in a specific place
+doc.files <- c(list.files(pattern = "pdf"),
+               list.files(pattern = "html"),
+               list.files(pattern = "docx"))
+
+for (file in doc.files) {
+    file.rename(file, file.path("../../hw5/", file))
+}
+```
+
+
+```{r libaries, message=FALSE, warning=FALSE, cache=FALSE}
+library(mdsr)
+library(tidyverse)
+library(tidymodels)
+library(yardstick)
+library(gt)
+```
+
+__1. Load “titanic data.csv” data downloaded from the Canvas. Use the following codes to preprocess the data:__
+
+```{r message = FALSE, warning = FALSE}
+
+filename <- "../../hw5/data/titanic_data.csv"
+ 
+titanic <- 
+    read_csv(filename) %>%
+        dplyr::select(-c(home.dest, cabin, name, x, ticket))%>%
+        filter(embarked != "?")%>%
+      
+        mutate(pclass = factor(pclass, levels = c(1, 2, 3), 
+                               labels = c("Upper", "Middle", "Lower")),
+      
+        survived = factor(survived, levels = c(0, 1), 
+                   labels = c("No", "Yes")),
+                   age = as.numeric(age),
+                   sex = factor(sex),
+                   embarked = factor(embarked)) %>%
+        na.omit() 
+        
+      
+```
+
+__(a) Separate the training and testing datasets using 80%/20% splitting. (5 points)__
+
+```{r}
+# Training testing/split
+set.seed(666)
+
+n <- nrow(titanic)
+
+# Split data 80/20
+split <- titanic %>%
+  initial_split(prop = 0.8)
+
+# Get training data
+train <- split %>%
+  training()
+
+# Get testing data
+test <- split %>%
+  testing()
+```
+```{r}
+# Double check data split
+list(train, test) %>%
+  map_int(nrow)
+```
+
+
+__(b) Fit a logistic regression model to predict survived using all other available variables. Here are the formula:__
+
+$$survived\ \sim\ pclass + sex + age + sibsp + parch + fare + embarked$$
+```{r}
+
+# Multivariate logistic regression
+model_logit <- 
+    
+    # Class
+    logistic_reg(mode = "classification") %>%
+    
+    # Engine
+    set_engine("glm") %>%
+    
+    # Fit formula    
+    fit(survived ~ pclass + sex + age + sibsp + parch + fare + embarked,
+        data = train)
+```
+
+__(b.1) Please show the confusion matrix for the training data and calculate the training accuracy rate. (10 points)__
+```{r}
+
+# Get training predictions
+pred_train <- 
+  train %>%
+      bind_cols(predict(model_logit, new_data = train, type = "class")) %>%
+      rename(survived_pred = .pred_class)
+
+# Confussin matrix
+pred_train %>%
+  conf_mat(truth = survived, estimate = survived_pred)
+```
+```{r}
+# Training accuracy rate
+accuracy(pred_train, survived, survived_pred) 
+```
+
+__(c) If we want to fit a random forests model using the same formula, how to set the parameter mtry (the number of candidates for splitting varibles)? (5 points)__
+
+# 2. 
+# 3. 
