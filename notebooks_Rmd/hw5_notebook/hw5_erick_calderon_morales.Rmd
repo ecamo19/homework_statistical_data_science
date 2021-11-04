@@ -60,11 +60,13 @@ library(tidyverse)
 library(tidymodels)
 library(yardstick)
 library(gt)
+# for random forest
+library(randomForest)
 ```
 
 __1. Load “titanic data.csv” data downloaded from the Canvas. Use the following codes to preprocess the data:__
 
-```{r message = FALSE, warning = FALSE}
+```{r message=FALSE, warning=FALSE}
 
 filename <- "../../hw5/data/titanic_data.csv"
  
@@ -83,7 +85,7 @@ titanic <-
                    embarked = factor(embarked)) %>%
         na.omit() 
         
-      
+glimpse(titanic)
 ```
 
 __(a) Separate the training and testing datasets using 80%/20% splitting. (5 points)__
@@ -95,21 +97,17 @@ set.seed(666)
 n <- nrow(titanic)
 
 # Split data 80/20
-split <- titanic %>%
-  initial_split(prop = 0.8)
+index <- sample(1:nrow(titanic),(nrow(titanic)*.80)/1)
 
 # Get training data
-train <- split %>%
-  training()
+training_data <- titanic[index,]
 
 # Get testing data
-test <- split %>%
-  testing()
-```
-```{r}
-# Double check data split
-list(train, test) %>%
-  map_int(nrow)
+testing_data <- titanic[-index,]
+
+# Double check
+(nrow(training_data)*100)/nrow(titanic)
+(nrow(testing_data)*100)/nrow(titanic)
 ```
 
 
@@ -117,10 +115,16 @@ __(b) Fit a logistic regression model to predict survived using all other availa
 
 $$survived\ \sim\ pclass + sex + age + sibsp + parch + fare + embarked$$
 ```{r}
+# Model formula 
+model <- as.formula(survived ~ pclass + sex + age + sibsp + parch + fare + 
+                        embarked)
+```
+
+
+```{r}
 
 # Multivariate logistic regression
-model_logit <- 
-    
+model_logit <-
     # Class
     logistic_reg(mode = "classification") %>%
     
@@ -128,29 +132,111 @@ model_logit <-
     set_engine("glm") %>%
     
     # Fit formula    
-    fit(survived ~ pclass + sex + age + sibsp + parch + fare + embarked,
-        data = train)
+    fit(model,
+        data = training_data)
 ```
 
 __(b.1) Please show the confusion matrix for the training data and calculate the training accuracy rate. (10 points)__
 ```{r}
-
 # Get training predictions
-pred_train <- 
-  train %>%
-      bind_cols(predict(model_logit, new_data = train, type = "class")) %>%
+pred_train_logit <- 
+  training_data %>% 
+      bind_cols(predict(model_logit, new_data = training_data)) %>%
       rename(survived_pred = .pred_class)
 
-# Confussin matrix
-pred_train %>%
+# Confusion matrix
+pred_train_logit %>%
   conf_mat(truth = survived, estimate = survived_pred)
 ```
+
 ```{r}
 # Training accuracy rate
-accuracy(pred_train, survived, survived_pred) 
+accuracy(pred_train_logit, survived, survived_pred) 
 ```
 
 __(c) If we want to fit a random forests model using the same formula, how to set the parameter mtry (the number of candidates for splitting varibles)? (5 points)__
 
-# 2. 
-# 3. 
+#### RESPONDER
+
+Growing a random forest proceeds in exactly the same way, except that
+we use a smaller value of the mtry argument. By default, randomForest()
+uses p/3 variables when building a random forest of regression trees, and
+sqrt(p) variables when building a random forest of classification trees.
+
+__(d) Fit a random forests model and show the confusion matrix for the training data and calculate the training accuracy rate. You can set the number of trees as 201. (10 points).__
+
+```{r}
+random_forest_titanic <- randomForest (model, data = training_data,
+                                       # mtry = squared of p'
+                                       #  -1 = remove response variable
+                                       mtry = 
+                                         round(sqrt(ncol(training_data) - 1),0), 
+                                       
+                                       # Number of trees
+                                       ntree = 201,
+                                       
+                                       # Which variables have the greatest 
+                                       # importance?
+                                       importance = TRUE)
+
+```
+
+```{r}
+# Get training predictions
+pred_train_random_forest <- 
+  training_data %>%
+      bind_cols(predict(random_forest_titanic, new_data = titanic[index,])) %>% 
+      rename(survived_pred_random_forest = ...9)
+
+# Confusion matrix
+pred_train_random_forest %>%
+  conf_mat(truth = survived, estimate = survived_pred_random_forest)
+```
+
+```{r}
+# Training accuracy rate
+accuracy(pred_train_random_forest, survived, survived_pred_random_forest)
+```
+
+##### Ver diferencia con script de la clase
+
+__(e) Find the most important explanatory variable of the random forests model. (5 points)__
+```{r}
+varImpPlot(random_forest_titanic)
+```
+
+__(f) Find the testing accuracy rate of the two models. (5 points)__
+
+```{r}
+# Get test predictions
+pred_test_logit <- 
+  testing_data %>% 
+      bind_cols(predict(model_logit, new_data = testing_data)) %>%
+      rename(survived_pred_test = .pred_class)
+```
+
+```{r}
+# Test accuracy rate
+accuracy(pred_test_logit, survived, survived_pred_test)
+```
+
+```{r}
+# Get test predictions
+pred_test_random_forest <- 
+  testing_data  %>% 
+      bind_cols(predict(random_forest_titanic, newdata = titanic[-index,], type = "class")) %>% 
+      rename(survived_pred_random_forest_test = ...9)
+      
+```
+
+```{r}
+# Test accuracy rate
+accuracy(pred_test_random_forest, survived, survived_pred_random_forest_test)
+```
+
+
+__(g) Which accuracy should we use to compare the two models? What’s your conclusion? (5 points)__
+
+the testing
+__(h) Calculate the sensitivity and specificity of the two models for the testing data. (5 points)__
+__(i) (Bonus) Draw the ROC curves of the two models using the testing data. (Hint: when you modify the demo codes, remember to replace ‘.pred >50K‘ with ‘.pred Yes‘.) (5 points)__
