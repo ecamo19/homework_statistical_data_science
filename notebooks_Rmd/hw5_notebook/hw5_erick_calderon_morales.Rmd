@@ -62,9 +62,13 @@ library(yardstick)
 library(gt)
 # for random forest
 library(randomForest)
+# for calculating sensitivity and specificity
+library(caret)
+# for ROC curve
+library(pROC)
 ```
 
-__1. Load “titanic data.csv” data downloaded from the Canvas. Use the following codes to preprocess the data:__
+_1. Load “titanic data.csv” data downloaded from the Canvas. Use the following codes to preprocess the data:_
 
 ```{r message=FALSE, warning=FALSE}
 
@@ -88,7 +92,19 @@ titanic <-
 glimpse(titanic)
 ```
 
-__(a) Separate the training and testing datasets using 80%/20% splitting. (5 points)__
+_Count total of No and Yes in the dataset_
+
+How do I know if the dataset is imbalanced? 
+
+```{r}
+titanic %>% 
+  group_by(survived) %>% 
+  count() %>%   
+  mutate(percent = (n/nrow(titanic)*100))
+```
+
+
+_(a) Separate the training and testing datasets using 80%/20% splitting. (5 points)_
 
 ```{r}
 # Training testing/split
@@ -110,8 +126,7 @@ testing_data <- titanic[-index,]
 (nrow(testing_data)*100)/nrow(titanic)
 ```
 
-
-__(b) Fit a logistic regression model to predict survived using all other available variables. Here are the formula:__
+_(b) Fit a logistic regression model to predict survived using all other available variables. Here are the formula:_
 
 $$survived\ \sim\ pclass + sex + age + sibsp + parch + fare + embarked$$
 ```{r}
@@ -122,7 +137,6 @@ model <- as.formula(survived ~ pclass + sex + age + sibsp + parch + fare +
 
 
 ```{r}
-
 # Multivariate logistic regression
 model_logit <-
     # Class
@@ -136,7 +150,7 @@ model_logit <-
         data = training_data)
 ```
 
-__(b.1) Please show the confusion matrix for the training data and calculate the training accuracy rate. (10 points)__
+_(b.1) Please show the confusion matrix for the training data and calculate the training accuracy rate. (10 points)_
 ```{r}
 # Get training predictions
 pred_train_logit <- 
@@ -149,24 +163,26 @@ pred_train_logit %>%
   conf_mat(truth = survived, estimate = survived_pred)
 ```
 
+
 ```{r}
 # Training accuracy rate
 accuracy(pred_train_logit, survived, survived_pred) 
 ```
 
-__(c) If we want to fit a random forests model using the same formula, how to set the parameter mtry (the number of candidates for splitting varibles)? (5 points)__
+__The confusion matrix shows that the logistic regression model in the train dataset classified correctly as No 427 out of 524 observations while it classified correctly as Yes 237 out of 310 observations__ 
 
-#### RESPONDER
 
-Growing a random forest proceeds in exactly the same way, except that
-we use a smaller value of the mtry argument. By default, randomForest()
-uses p/3 variables when building a random forest of regression trees, and
-sqrt(p) variables when building a random forest of classification trees.
+_(c) If we want to fit a random forests model using the same formula, how to set the parameter mtry (the number of candidates for splitting varibles)? (5 points)_
 
-__(d) Fit a random forests model and show the confusion matrix for the training data and calculate the training accuracy rate. You can set the number of trees as 201. (10 points).__
+
+__mtry for the random forest is defined as $\sqrt{predictors}$ __
+
+
+_(d) Fit a random forests model and show the confusion matrix for the training data and calculate the training accuracy rate. You can set the number of trees as 201. (10 points)._
 
 ```{r}
 random_forest_titanic <- randomForest (model, data = training_data,
+         
                                        # mtry = squared of p'
                                        #  -1 = remove response variable
                                        mtry = 
@@ -198,17 +214,17 @@ pred_train_random_forest %>%
 accuracy(pred_train_random_forest, survived, survived_pred_random_forest)
 ```
 
-##### Ver diferencia con script de la clase
 
-__(e) Find the most important explanatory variable of the random forests model. (5 points)__
+
+_(e) Find the most important explanatory variable of the random forests model. (5 points)_
 ```{r}
 varImpPlot(random_forest_titanic)
 ```
 
-__(f) Find the testing accuracy rate of the two models. (5 points)__
+_(f) Find the testing accuracy rate of the two models. (5 points)_
 
 ```{r}
-# Get test predictions
+# Get test predictions for logistic regression model
 pred_test_logit <- 
   testing_data %>% 
       bind_cols(predict(model_logit, new_data = testing_data)) %>%
@@ -216,12 +232,12 @@ pred_test_logit <-
 ```
 
 ```{r}
-# Test accuracy rate
+# Test accuracy rate for logistic regression model
 accuracy(pred_test_logit, survived, survived_pred_test)
 ```
 
 ```{r}
-# Get test predictions
+# Get test predictions for random forest
 pred_test_random_forest <- 
   testing_data  %>% 
       bind_cols(predict(random_forest_titanic, newdata = titanic[-index,], type = "class")) %>% 
@@ -230,13 +246,70 @@ pred_test_random_forest <-
 ```
 
 ```{r}
-# Test accuracy rate
+# Test accuracy rate for random forest
 accuracy(pred_test_random_forest, survived, survived_pred_random_forest_test)
 ```
 
-
-__(g) Which accuracy should we use to compare the two models? What’s your conclusion? (5 points)__
+_(g) Which accuracy should we use to compare the two models? What’s your conclusion? (5 points)_
 
 the testing
-__(h) Calculate the sensitivity and specificity of the two models for the testing data. (5 points)__
-__(i) (Bonus) Draw the ROC curves of the two models using the testing data. (Hint: when you modify the demo codes, remember to replace ‘.pred >50K‘ with ‘.pred Yes‘.) (5 points)__
+
+_(h) Calculate the sensitivity and specificity of the two models for the testing data. (5 points)_
+
+```{r}
+# Get probs for yes and no
+probs <- predict(random_forest_titanic, newdata = titanic[-index,], type = "prob")
+pred <- predict(random_forest_titanic, newdata = titanic[-index,])
+
+head(as.data.frame(cbind(probs,pred)))
+```
+
+
+```{r}
+testing_data$random_forest_prob_no <- probs[,1]
+testing_data$random_forest_prob_yes <- probs[,2]
+
+testing_data$random_forest_pred <- predict(random_forest_titanic, 
+                                           newdata = titanic[-index,])
+
+```
+
+__Sensitivity__
+
+The sensitivity of the model is the rate that the event of interest is predicted correctly for all samples having the event. (True positive rate)
+It measures the accuracy in the event population
+```{r}
+# Class Yes will be used as the event of interest
+sensitivity(data = testing_data$random_forest_pred, 
+            reference = testing_data$survived,
+            positive = "Yes")
+```
+
+__Specificity__
+
+```{r}
+specificity(data = testing_data$random_forest_pred,
+            reference = testing_data$survived,
+            negative = "No")
+```
+
+__False-positive rate__
+```{r}
+1 - (specificity(data = testing_data$random_forest_pred,
+            reference = testing_data$survived,
+            negative = "No"))
+```
+
+_(i) (Bonus) Draw the ROC curves of the two models using the testing data. (Hint: when you modify the demo codes, remember to replace ‘.pred >50K‘ with ‘.pred Yes‘.) (5 points)_
+
+```{r}
+roc_curve <- roc(response  = testing_data$survived,
+                 predictor = testing_data$random_forest_prob_no,
+                 levels    = rev(levels(testing_data$survived)))
+```
+
+```{r}
+plot(roc_curve,legacy.axes = TRUE, xlim = c(1,0))
+```
+
+
