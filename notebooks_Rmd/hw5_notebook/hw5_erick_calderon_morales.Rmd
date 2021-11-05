@@ -10,7 +10,6 @@ output:
     toc: yes
     number_sections: no
     toc_depth: 1
-
 ---
 
 ```{r setup, include=FALSE}
@@ -66,6 +65,8 @@ library(randomForest)
 library(caret)
 # for ROC curve
 library(pROC)
+# for joining plots
+library(cowplot)
 ```
 
 _1. Load “titanic data.csv” data downloaded from the Canvas. Use the following codes to preprocess the data:_
@@ -87,6 +88,7 @@ titanic <-
                    age = as.numeric(age),
                    sex = factor(sex),
                    embarked = factor(embarked)) %>%
+        # No NA's in the data set
         na.omit() 
         
 glimpse(titanic)
@@ -121,18 +123,21 @@ training_data <- titanic[index,]
 # Get testing data
 testing_data <- titanic[-index,]
 
+```
+```{r}
 # Double check
 (nrow(training_data)*100)/nrow(titanic)
 (nrow(testing_data)*100)/nrow(titanic)
 ```
+
 
 _(b) Fit a logistic regression model to predict survived using all other available variables. Here are the formula:_
 
 $$survived\ \sim\ pclass + sex + age + sibsp + parch + fare + embarked$$
 ```{r}
 # Model formula 
-model <- as.formula(survived ~ pclass + sex + age + sibsp + parch + fare + 
-                        embarked)
+model <- as.formula(survived ~ pclass + sex  + age + sibsp + 
+                               parch  + fare + embarked)
 ```
 
 
@@ -151,6 +156,9 @@ model_logit <-
 ```
 
 _(b.1) Please show the confusion matrix for the training data and calculate the training accuracy rate. (10 points)_
+
+__The confusion matrix shows that the logistic regression model in the train dataset classified correctly as No 427 out of 524 observations while it classified correctly as Yes 237 out of 310 observations having a accuracy of ~ 80%.__ 
+
 ```{r}
 # Get training predictions
 pred_train_logit <- 
@@ -163,27 +171,28 @@ pred_train_logit %>%
   conf_mat(truth = survived, estimate = survived_pred)
 ```
 
-
 ```{r}
 # Training accuracy rate
 accuracy(pred_train_logit, survived, survived_pred) 
 ```
 
-__The confusion matrix shows that the logistic regression model in the train dataset classified correctly as No 427 out of 524 observations while it classified correctly as Yes 237 out of 310 observations__ 
 
 
 _(c) If we want to fit a random forests model using the same formula, how to set the parameter mtry (the number of candidates for splitting varibles)? (5 points)_
 
-
-__mtry for the random forest is defined as $\sqrt{predictors}$ __
+__For setting the parameter _mtry_ for the random forest it is recommend to use $\sqrt{predictors}$.__
 
 
 _(d) Fit a random forests model and show the confusion matrix for the training data and calculate the training accuracy rate. You can set the number of trees as 201. (10 points)._
 
+
+__The confusion matrix shows that the random forest model in the train dataset classified correctly as No 436 out of 539 observations while it classified correctly as Yes 231 out of 295 observations having a accuracy of ~ 80%.__ 
+
+
 ```{r}
 random_forest_titanic <- randomForest (model, data = training_data,
          
-                                       # mtry = squared of p'
+                                       # mtry = squared of p
                                        #  -1 = remove response variable
                                        mtry = 
                                          round(sqrt(ncol(training_data) - 1),0), 
@@ -214,14 +223,17 @@ pred_train_random_forest %>%
 accuracy(pred_train_random_forest, survived, survived_pred_random_forest)
 ```
 
-
-
 _(e) Find the most important explanatory variable of the random forests model. (5 points)_
+
+__From the plots below, it seems that sex it's the most important variable for the classification of survived, while fare and age appear to be also important when taking into consideration only the Gini index.__
+
 ```{r}
 varImpPlot(random_forest_titanic)
 ```
-
+ 
 _(f) Find the testing accuracy rate of the two models. (5 points)_
+
+__The testing accuracy for the logistic regression is 76% and the testing accuracy for the random forest is ~79%.__ 
 
 ```{r}
 # Get test predictions for logistic regression model
@@ -236,48 +248,50 @@ pred_test_logit <-
 accuracy(pred_test_logit, survived, survived_pred_test)
 ```
 
-```{r}
-# Get test predictions for random forest
+```{r message=FALSE, warning=FALSE}
+# Get test predictions for random forest model
 pred_test_random_forest <- 
   testing_data  %>% 
-      bind_cols(predict(random_forest_titanic, newdata = titanic[-index,], type = "class")) %>% 
+      bind_cols(predict(random_forest_titanic, newdata = titanic[-index,], 
+                        type = "class")) %>% 
       rename(survived_pred_random_forest_test = ...9)
       
 ```
 
 ```{r}
-# Test accuracy rate for random forest
+# Test accuracy rate for random forest model
 accuracy(pred_test_random_forest, survived, survived_pred_random_forest_test)
 ```
 
 _(g) Which accuracy should we use to compare the two models? What’s your conclusion? (5 points)_
 
-the testing
+__For comparing the two models the testing accuracy should be used. This because using the testing accuracy will indicate how well a model performs when new data is used. In this particular case, it seems that the random forest model is a little bit better than the logistic regression for classifing the survival.__
 
 _(h) Calculate the sensitivity and specificity of the two models for the testing data. (5 points)_
 
-```{r}
-# Get probs for yes and no
-probs <- predict(random_forest_titanic, newdata = titanic[-index,], type = "prob")
-pred <- predict(random_forest_titanic, newdata = titanic[-index,])
+Definition: "The sensitivity of the model is the rate that the event of interest is predicted correctly for all samples having the event. (True positive rate)
+It measures the accuracy in the event population. Specificity, on the other hand, is to measure what portion of the actual false records you predicted correctly"
 
-head(as.data.frame(cbind(probs,pred)))
+```{r}
+
+pred_logit <- predict(model_logit, new_data = titanic[-index,])
+colnames(pred_logit) <- "pred_logit"
+
+testing_data <- cbind(testing_data,pred_logit)
+
 ```
 
-
 ```{r}
-testing_data$random_forest_prob_no <- probs[,1]
-testing_data$random_forest_prob_yes <- probs[,2]
-
 testing_data$random_forest_pred <- predict(random_forest_titanic, 
                                            newdata = titanic[-index,])
-
 ```
 
-__Sensitivity__
+__When compared the two models, the sensitivity of the random forest is higher to the sensitivity of the logistic regression. This indicate that the random forest model has a higher capacity of detecting correctly the Yes in the variable survived than the logistic regression. In the case of specificity, this index is also higher in the random forest model. This indicate that the random forest model has also a higher capacity of detecting correctly the No in the variable survived.__ 
 
-The sensitivity of the model is the rate that the event of interest is predicted correctly for all samples having the event. (True positive rate)
-It measures the accuracy in the event population
+__Also, is important to note that in both models the Sensitivity is low (~60%). I think this happens because the data set is imbalance. There are more No (60%) cases that Yes (40%) which could led to low Sensitivity values.__
+
++ __Sensitivity for random forest model__
+
 ```{r}
 # Class Yes will be used as the event of interest
 sensitivity(data = testing_data$random_forest_pred, 
@@ -285,7 +299,16 @@ sensitivity(data = testing_data$random_forest_pred,
             positive = "Yes")
 ```
 
-__Specificity__
++ __Sensitivity for logistic regression model__
+
+```{r}
+# Class Yes will be used as the event of interest
+sensitivity(data = testing_data$pred_logit, 
+            reference = testing_data$survived,
+            positive = "Yes")
+```
+
++ __Specificity for random forest model__
 
 ```{r}
 specificity(data = testing_data$random_forest_pred,
@@ -293,23 +316,57 @@ specificity(data = testing_data$random_forest_pred,
             negative = "No")
 ```
 
-__False-positive rate__
++ __Specificity for logistic regression model__
+
 ```{r}
-1 - (specificity(data = testing_data$random_forest_pred,
+specificity(data = testing_data$pred_logit,
             reference = testing_data$survived,
-            negative = "No"))
+            negative = "No")
 ```
 
 _(i) (Bonus) Draw the ROC curves of the two models using the testing data. (Hint: when you modify the demo codes, remember to replace ‘.pred >50K‘ with ‘.pred Yes‘.) (5 points)_
 
+
++ __ROC for random forest model__
 ```{r}
-roc_curve <- roc(response  = testing_data$survived,
-                 predictor = testing_data$random_forest_prob_no,
-                 levels    = rev(levels(testing_data$survived)))
+# Get probs for yes and no
+probs_rf <- predict(random_forest_titanic, newdata = titanic[-index,], 
+                    type = "prob")
+
+testing_data$random_forest_prob_yes <- probs_rf[,2]
+
 ```
 
+```{r message=FALSE, warning=FALSE}
+roc_curve_rf <- roc(response  = testing_data$survived,
+                    predictor = testing_data$random_forest_prob_yes,
+                    levels    = rev(levels(testing_data$survived)))
+roc_curve_rf$auc
+```
+
++ __ROC curve for logistic regression model__
 ```{r}
-plot(roc_curve,legacy.axes = TRUE, xlim = c(1,0))
+logit_prob_yes <- predict(model_logit, new_data = titanic[-index,], 
+                    type = "prob")[,2]
+
+colnames(logit_prob_yes) <- "probs_logit_yes"
+
+testing_data <- cbind(testing_data,logit_prob_yes)
+
+```
+
+```{r message=FALSE, warning=FALSE}
+roc_curve_logit <- roc(response  = testing_data$survived,
+                       predictor = testing_data$probs_logit_yes,
+                       levels    = rev(levels(testing_data$survived)))
+roc_curve_logit$auc
+```
+
+__Both ROC curves are very similar, the only difference is the area under the curve for the Random forest model (0.844) is a little bit greater that the area under the curve for the logistic model (0.8302)__
+```{r}
+par(mfrow = c(1,2))
+plot(roc_curve_rf, legacy.axes = TRUE, main = "ROC for Random forest model")
+plot(roc_curve_logit, legacy.axes = TRUE, main = "ROC for Logistic regression model")
 ```
 
 
