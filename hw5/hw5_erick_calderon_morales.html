@@ -332,24 +332,32 @@ Prediction  No Yes
 <span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">reference =</span> testing_data<span class="sc">$</span>survived,</span>
 <span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">positive =</span> <span class="st">&quot;Yes&quot;</span>)</span></code></pre></div>
 <pre><code>[1] 0.6813187</code></pre>
-<p><strong>Sensitivity for logistic regression model</strong></p>
+<ul>
+<li><strong>Sensitivity for logistic regression model</strong></li>
+</ul>
 <div class="sourceCode" id="cb33"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Class Yes will be used as the event of interest</span></span>
 <span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a><span class="fu">sensitivity</span>(<span class="at">data =</span> testing_data<span class="sc">$</span>pred_logit, </span>
 <span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">reference =</span> testing_data<span class="sc">$</span>survived,</span>
 <span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>            <span class="at">positive =</span> <span class="st">&quot;Yes&quot;</span>)</span></code></pre></div>
 <pre><code>[1] 0.6593407</code></pre>
-<p><strong>Specificity for random forest model</strong></p>
+<ul>
+<li><strong>Specificity for random forest model</strong></li>
+</ul>
 <div class="sourceCode" id="cb35"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">specificity</span>(<span class="at">data =</span> testing_data<span class="sc">$</span>random_forest_pred,</span>
 <span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>            <span class="at">reference =</span> testing_data<span class="sc">$</span>survived,</span>
 <span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">negative =</span> <span class="st">&quot;No&quot;</span>)</span></code></pre></div>
 <pre><code>[1] 0.8728814</code></pre>
-<p><strong>Specificity for logistic regression model</strong></p>
+<ul>
+<li><strong>Specificity for logistic regression model</strong></li>
+</ul>
 <div class="sourceCode" id="cb37"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="fu">specificity</span>(<span class="at">data =</span> testing_data<span class="sc">$</span>pred_logit,</span>
 <span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>            <span class="at">reference =</span> testing_data<span class="sc">$</span>survived,</span>
 <span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">negative =</span> <span class="st">&quot;No&quot;</span>)</span></code></pre></div>
 <pre><code>[1] 0.8389831</code></pre>
 <p><em>(i) (Bonus) Draw the ROC curves of the two models using the testing data. (Hint: when you modify the demo codes, remember to replace ’.pred &gt;50K‘ with ’.pred Yes‘.) (5 points)</em></p>
-<p><strong>ROC for random forest model</strong></p>
+<ul>
+<li><strong>ROC for random forest model</strong></li>
+</ul>
 <div class="sourceCode" id="cb39"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Get probs for yes and no</span></span>
 <span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>probs_rf <span class="ot">&lt;-</span> <span class="fu">predict</span>(random_forest_titanic, <span class="at">newdata =</span> titanic[<span class="sc">-</span>index,], </span>
 <span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">type =</span> <span class="st">&quot;prob&quot;</span>)</span>
@@ -360,7 +368,9 @@ Prediction  No Yes
 <span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">levels    =</span> <span class="fu">rev</span>(<span class="fu">levels</span>(testing_data<span class="sc">$</span>survived)))</span>
 <span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>roc_curve_rf<span class="sc">$</span>auc</span></code></pre></div>
 <pre><code>Area under the curve: 0.844</code></pre>
-<p><strong>ROC curve for logistic regression model</strong></p>
+<ul>
+<li><strong>ROC curve for logistic regression model</strong></li>
+</ul>
 <div class="sourceCode" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>logit_prob_yes <span class="ot">&lt;-</span> <span class="fu">predict</span>(model_logit, <span class="at">new_data =</span> titanic[<span class="sc">-</span>index,], </span>
 <span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">type =</span> <span class="st">&quot;prob&quot;</span>)[,<span class="dv">2</span>]</span>
 <span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a></span>

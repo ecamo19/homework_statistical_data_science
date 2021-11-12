@@ -1,0 +1,319 @@
+---
+title: 'STAT 534: Homework 6'
+author: "Erick Calderon-Morales"
+date: ' Fall 2021'
+due_date: ""
+output:
+  prettydoc::html_pretty:
+    highlight: pygments
+    theme: cayman
+    toc: yes
+    number_sections: no
+    toc_depth: 1
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,comment = "", fig.align = 'center',
+					  fig.width = 11, fig.height = 7)
+```
+
+
+
+```{r knitr, include = FALSE}
+
+# Save figures in specific place
+
+knitr::opts_chunk$set(autodep        = TRUE,
+                      cache          = FALSE,
+                      cache.comments = TRUE,
+                      
+                      # Include code?
+                      echo           = TRUE,
+                      
+                      error          = FALSE,
+                      fig.align      = "center",
+                      
+                      # Path to where to store pdf single figures
+                      fig.path       = paste0("../hw6_notebook/hw6_figures", "/"),
+                      fig.width      = 11,
+                      fig.height     = 7,
+                      message        = FALSE,
+                      warning        = FALSE)
+```
+
+
+```{r cleanup-docs, cache = FALSE,echo = FALSE}
+
+# save a html copy file in a specific place
+doc.files <- c(list.files(pattern = "pdf"),
+               list.files(pattern = "html"),
+               list.files(pattern = "docx"))
+
+for (file in doc.files) {
+    file.rename(file, file.path("../../hw6/", file))
+}
+```
+
+
+```{r libaries, message=FALSE, warning=FALSE, cache=FALSE}
+library(tidyverse)
+library(mdsr)
+library(readxl)
+library(ape)
+library(factoextra)
+library(ggsci)
+library(cowplot)
+library(mclust)
+library(viridis)
+```
+
+_1. Suppose that we have four observations, for which we compute a dissimilarity matrix, given by:_
+
+$$i = \begin{bmatrix}
+0 & 0.2 & 0.7 & 0.5 \\
+0.2 & 0 & 0.3 & 0.6 \\
+0.7 & 0.3 & 0 & 0.4 \\
+0.5 & 0.6 & 0.4 & 0
+\end{bmatrix}$$
+
+
+
+
+_For instance, the dissimilarity (distance) between the first and second observations is 0.2, and the dissimilarity (distance) between the second and fourth observations is 0.6._
+
+_(a) Which two points we need to cluster together first? (5 points)_
+
+__The first points to cluster are observation 1 and 2 since these observations are the most similar (0.2)__
+
+_(b) Using complete (MAX) linkage, write the dissimilarity matrix after the first step in (a). You should get a 3 × 3 matrix. Based on this matrix, what should be the next step? (5 points)_
+
+$$i-1 = \begin{bmatrix}
+ 0 & 0.3 & 0.6 \\
+ 0.3 & 0 & 0.4 \\
+ 0.6 & 0.4 & 0
+\end{bmatrix}$$
+
+__After clustering 1 and 2, the next step is cluster the other single points that were not cluster together. From the matrix above the points 3 and 4 should be cluster together since these points are the most similar (0.4).__
+
+
+_(c) Continue (b) to sketch the dendrogram using complete (MAX) linkage and get two clusters from it. (5 points)_
+
+
+```{r}
+dist_matrix = as.dist(matrix(c(0, 0.2, 0.7, 0.5, 
+                     0.2, 0, 0.3, 0.6,
+                     0.7, 0.3, 0, 0.4,
+                     0.5, 0.6, 0.4, 0.0), nrow = 4))
+plot(hclust(dist_matrix, method = "complete"))
+```
+
+
+_(d) Repeat (b) using single (MIN) linkage. What should be the next step then? (You do not need to complete the dendrogram here.) (5 points)_
+
+$$\begin{bmatrix}
+ 0 & 0.3 & 0.6 \\
+ 0.3 & 0 & 0.4 \\
+ 0.6 & 0.4 & 0
+\end{bmatrix}$$
+
+
+__After finding that observations 1 and 2 are the most similar, the next step is to fuse together this cluster (with 1 and 2 inside) with the next point with the lowest dissimilarity. In this case, we should fuse the cluster with point 3 since the dissimilarity between the two is 0.3__
+
+
+_2. Carry out and interpret a clustering of vehicles from another manufacturer using the hierarchical clustering in the first course example. (Hint: you can find all the manufacture names in the Mfr Name column.) (10 points)_
+
+```{r}
+# Read data
+file <- "../hw6_notebook/data/cars.xlsx"
+```
+
+```{r}
+nissan_cars <- 
+  read_excel(file) %>% 
+    
+    # Clean colnmaes
+    janitor::clean_names() %>%
+    
+    select(
+           number_cyl,
+           number_gears,
+           
+           # Rename vars
+           make = mfr_name,
+           model = carline, 
+           displacement = eng_displ,
+           city_mpg = city_fe_guide_conventional_fuel,
+           hwy_mpg = hwy_fe_guide_conventional_fuel)%>%
+  
+  # Keep all distinctive model
+  distinct(model, .keep_all = TRUE) %>% 
+  filter(make == "Nissan")
+
+glimpse(nissan_cars)
+```
+```{r}
+# Find distance matrix
+nissan_cars_dist <-
+  nissan_cars %>%
+    column_to_rownames(var = "model") %>% 
+    dist()
+
+```
+
+```{r}
+str(nissan_cars_dist) 
+
+# Transform distance object to matrix
+nissan_car_dist_matrix <-
+  nissan_cars_dist %>% 
+  as.matrix()
+```
+
+
+```{r}
+# check subset of the data
+nissan_car_dist_matrix[1:6, 1:6] %>% 
+  round(digits = 2)
+```
+```{r}
+nissan_cars_dist %>% 
+  hclust() %>% 
+  plot(cex = 0.6, hang = -1)
+```
+
+
+```{r}
+hc_cluster_nissan <- hclust(nissan_cars_dist, method = "complete")
+```
+
+```{r fig.width = 15, fig.height = 18}
+(dendro_plot <- 
+  fviz_dend(x = hc_cluster_nissan, cex = 0.9, lwd = 0.7, k = 7,
+          k_colors = c("jco"),
+          rect = TRUE, 
+          rect_border = "jco", 
+          rect_fill = TRUE,
+          horiz = TRUE))
+```
+
+
+__Interpretation: From the cluster above I identified 7 clusters: The first one (Khaki) mainly clusters hybrid cars with all wheel drive (AWD) or Four wheel drive (FWD), the second cluster is mainly composed of the models Q (50 and 60) and the Juke. The third clusters is composed of big cars like the Nissan Pathfinder and Cargo Van. The fourth cluster is mainly composed of sports cars lithe Q50 red sport. The fifth cluster is composed by the Nissan Sentra model. The Sixth cluster is composed of race cars like the 370 roadster. Finally the last cluster is composed of the QX80 model.__
+
+__What I can see from this cluster analysis is that there is a wide variation in performance withing same model cars. My expectation was that each cluster would be composed of the same model (for example one cluster of Q series car another with only Juke models etc) but this cluster analysis demonstrates that this is not true__
+
+
+_3. (a) Re-fit the k-means algorithm on the BigCities data of the second course example with a different value of k (i.e., not six). Experiment with at least two different values of k and report on the sensitivity of the algorithm to changes in this parameter. (10 points) _
+
+__When the value of k increased more mean centroids are created which lead to a more sensitivity to classify data points into different clusters. In the example above when k is equal to 8, America is classified as South and North but when k is equal to 16, the algorithm classifies America in three parts, North, Central and South__
+
+```{r}
+# Clean data
+big_cities <- 
+  world_cities %>% 
+    arrange(desc(population)) %>%
+    head(4000) %>% 
+    select(longitude, latitude)
+
+glimpse(big_cities)
+```
+
+```{r}
+set.seed(666)
+# Kmeans algorithm
+city_8_clusts <- 
+  big_cities %>% 
+    kmeans(centers = 8) %>%
+    fitted("classes") %>% 
+    as.character()
+
+# Add cluster labels to main data set
+big_cities <- big_cities %>% 
+  mutate(cluster_8 = city_8_clusts)
+
+```
+
+```{r}
+world_map_8 <- 
+  big_cities %>% 
+      ggplot(aes(x = longitude, y = latitude)) +
+      geom_point(aes(color = cluster_8), alpha = 0.5)  + 
+      theme_bw() +
+      ggtitle("k = 8")
+      
+
+```
+
+```{r}
+# Kmeans algorithm
+city_16_clusts <- 
+  big_cities %>% 
+    kmeans(centers = 16) %>%
+    fitted("classes") %>% 
+    as.character()
+
+# Add cluster labels to main data set
+big_cities <- big_cities %>% 
+  mutate(cluster_16 = city_16_clusts)
+
+```
+
+```{r}
+world_map_16 <- 
+  big_cities %>% 
+      ggplot(aes(x = longitude, y = latitude)) +
+      geom_point(aes(color = cluster_16), alpha = 0.5)  +
+      theme_bw() +
+      ggtitle("k = 16")
+      
+```
+
+
+```{r fig.width = 15, fig.height = 5}
+plot_grid(world_map_8,world_map_16)
+```
+
+_3. (b) Project the world cities coordinates using the Gall-Peters projection (see below) and run the k-means algorithm again. (you can try one of your k’s in (a) or k = 6). Would you expect to obtain different results? Verify your guess by showing the clustering results. (10 points)_
+
+__According to [Wikipedia](https://en.wikipedia.org/wiki/Gall%E2%80%93Peters_projection) the Gall–Peters projection is a rectangular map projection that maps all areas such that they have the correct sizes relative to each other. Based on this I don't expected to obtain a different result since I think it is just a change in size of each continent.__ 
+
+__The plot from below shows that my guess was wrong since it creates 3 clusters in America and not 2 as the plot created with k = 8 and the coordinates with no transformation__ 
+
+```{r}
+big_cities_gall_peters <- world_cities %>%
+  arrange(desc(population)) %>%
+  head(4000) %>% 
+  transmute(x = pi*longitude/180/sqrt(2), 
+          y = sqrt(2)*sin(pi*latitude/180))
+```
+
+
+```{r}
+
+# Kmeans algorithm
+city_8_clusts_gall_peters <- 
+     big_cities_gall_peters %>% 
+          kmeans(centers = 8) %>%
+          fitted("classes") %>% 
+          as.character()
+
+# Add cluster labels to main data set
+big_cities_gall_peters <- big_cities_gall_peters %>% 
+  mutate(cluster_8_gall_peters = city_8_clusts_gall_peters)
+
+```
+
+```{r}
+plot_gall_peters <- big_cities_gall_peters %>% 
+      ggplot(aes(x = x, y = y)) +
+      geom_point(aes(color = cluster_8_gall_peters), alpha = 0.5)  + 
+      theme_bw() +
+      ggtitle("k = 8 with Gall-Peters transformation")
+
+```
+
+```{r fig.width = 15, fig.height = 5}
+plot_grid(world_map_8,plot_gall_peters)
+```
+
+
